@@ -2202,26 +2202,58 @@ This section is the **distribution plan** for those external users.
 
 ### 15.1 Distribution surfaces
 
-Three artifact channels:
+**Five artifact channels** (updated 2026-05-19 — `env-tarball` and the Docker image are the canonical install paths; `conda env create` from yaml is retained but flagged experimental):
 
 | Channel | Hosts | Why |
 |---|---|---|
-| **GitHub** (`videvalkit/videvalkit`) | code, configs, scripts, manuals, tests | source of truth for the toolkit |
-| **HuggingFace dataset** (`videvalkit/checkpoints`) | model weights, ~ 80 GB total | LFS-tracked, gated download via `huggingface_hub` |
-| **HuggingFace dataset** (`videvalkit/smoke-data`) | small (~ 1 GB) sample videos + prompt JSONs | "can I run anything?" before downloading the heavy stuff |
+| **GitHub** (`videogenevalkit/videogenevalkit`) | code, configs, scripts, manuals, tests, Dockerfile | source of truth for the toolkit |
+| **HF dataset** (`videogenevalkit/env-tarball`) | conda-pack snapshot of the working env, ~7.6 GB compressed | **canonical install** — bypasses pip resolution entirely; users `tar xzf` and run |
+| **HF dataset** (`videogenevalkit/checkpoints`) | model weights, ~ 125 GB total | per-bench fetch via `videvalkit fetch-checkpoints` |
+| **HF dataset** (`videogenevalkit/smoke-data`) | small (~ 3 GB) sample videos + prompt JSONs across all 6 benches | "can I run anything?" before downloading the heavy stuff |
+| **GHCR** (`ghcr.io/videogenevalkit/videogenevalkit`) | Docker image built from `env-tarball` + repo source, ~15-25 GB | one-command install for users with NVIDIA Container Toolkit |
 
-User journey (zero-to-first-score):
+User journey (zero-to-first-score), **tarball path** (recommended):
 
 ```
 1. clone the GitHub repo
-2. conda env create -f envs/videvalkit.yaml         (~ 15 min, ~ 12 GB env)
-3. videvalkit doctor                                (sanity-check)
-4. videvalkit fetch-checkpoints --bench worldjen    (only what you'll run)
-5. videvalkit fetch-smoke-data                      (~ 100 MB, one model × 50 videos)
-6. videvalkit eval --bench worldjen --videos data/smoke/kling --workspace ws
+2. hf download videogenevalkit/env-tarball videvalkit-env.tar.gz     (~ 7.6 GB, ~ 5 min)
+3. tar xzf videvalkit-env.tar.gz -C /opt/videvalkit-env               (~ 1 min)
+4. source /opt/videvalkit-env/bin/activate && conda-unpack            (~ 30 s)
+5. pip install --no-deps -e .                                         (~ 10 s)
+6. bash scripts/post_install.sh                                       (~ 15 min — git installs)
+7. videvalkit doctor                                                  (sanity check)
+8. videvalkit fetch-smoke-data + fetch-checkpoints + eval             (per-bench)
 ```
 
-Each command should run in under 30 minutes total before producing a first score.
+Tarball path total: **~ 30 minutes**, zero install-time dependency resolution, zero failure modes from PyPI/sdist conflicts.
+
+**Docker path** (alternative — same outcome, different packaging):
+
+```
+1. docker pull ghcr.io/videogenevalkit/videogenevalkit:0.1.0          (~ 10-25 min image pull)
+2. docker run --rm --gpus all videogenevalkit/videogenevalkit:0.1.0 doctor
+3. docker run --rm --gpus all -v ...:/cache videogenevalkit/videogenevalkit:0.1.0 \
+       eval --bench worldjen ...
+```
+
+**Why `conda env create -f envs/videvalkit.yaml` is now experimental:** the lock has ~350 transitive version pins. The original env at `/pub/.../envs/videvalkit/` was built incrementally with many `pip install --no-deps` patches over a multi-week validation campaign. Pip's resolver cannot reconstruct this from scratch — testing during 2026-05-19 showed 10+ consecutive failures iterating on triton, fsspec, pillow, mmcv, detectron2, aliyun-*, droid_backends conflicts. The yaml is retained for contributors who want to debug or evolve the env; not recommended for end users.
+
+The conda-pack tarball at `videogenevalkit/env-tarball` is regenerated from the working env whenever the maintainer runs:
+
+```bash
+conda-pack \
+    -p /path/to/working/env \
+    --ignore-editable-packages \
+    --ignore-missing-files \
+    --exclude "lib/python3.10/site-packages/SAM_2-*" \
+    --exclude "lib/python3.10/site-packages/groundingdino*" \
+    --exclude "lib/python3.10/site-packages/vbench*" \
+    --exclude "lib/python3.10/site-packages/videvalkit*" \
+    --output videvalkit-env.tar.gz \
+    --n-threads 16
+```
+
+then uploads via `huggingface_hub.HfApi.upload_file(repo_id="videogenevalkit/env-tarball", ...)`. End-to-end ~5 minutes on a fast link.
 
 ### 15.2 Conda env packaging
 

@@ -74,36 +74,100 @@
 
 ## 3. 安装
 
-### 3.1 克隆仓库
+提供三种安装路径，按推荐度排序：
+
+| 路径 | 耗时 | 可靠性 | 适用场景 |
+|---|---|---|---|
+| **3.1 预打包 env tarball（压缩包）** | ~10 分钟 | ✓✓✓ 确定性安装 | 终端用户 — **推荐** |
+| **3.2 Docker 镜像** | ~10 分钟 + 镜像拉取 | ✓✓✓ 确定性安装 | 已配置 Docker + NVIDIA Container Toolkit 的用户 |
+| **3.3 从 conda yaml 构建环境** | 30-60 分钟，可能失败 | 实验性 | 贡献者重建环境栈时使用 |
+
+三种路径完成后都会得到同样可用的 `videvalkit` 命令行工具，任选其一即可。
+
+### 3.1 通过预打包 env tarball 安装（推荐）
+
+工具集在 HuggingFace 上发布了已验证可用环境的 `conda-pack` 快照，仓库为 `videogenevalkit/env-tarball`。该 tarball 是一个独立的 Python 3.10 prefix，已预装约 350 个固定版本的依赖（torch 2.3.1+cu121、transformers 4.51.3、mmcv 2.2.0、decord、opencv、pyiqa、openai-clip、timm、xformers、triton、bitsandbytes、accelerate、peft、ms-swift、qwen-vl-utils 及所有传递依赖的验证组合）。**安装时不需要 pip 解析依赖 → 不会遇到解析失败。**
+
+```bash
+# 1. 克隆仓库（仅取源代码与脚本，暂不安装）
+git clone https://github.com/videogenevalkit/videogenevalkit.git
+cd videogenevalkit
+
+# 2. 下载 env tarball（~7.6 GB）
+hf download videogenevalkit/env-tarball videvalkit-env.tar.gz \
+    --local-dir /tmp
+
+# 3. 解压到持久目录（解压后约 15 GB）
+sudo mkdir -p /opt/videvalkit-env
+sudo tar xzf /tmp/videvalkit-env.tar.gz -C /opt/videvalkit-env
+sudo chown -R $USER /opt/videvalkit-env
+
+# 4. 激活并修正环境内的绝对路径
+source /opt/videvalkit-env/bin/activate
+conda-unpack
+
+# 5. 安装工具集源码（以可编辑方式安装到本仓库）
+pip install --no-deps -e .
+
+# 6. 安装预打包未包含的 7 个 build-from-source / git-only 依赖
+bash scripts/post_install.sh
+# 如果不需要 WorldScore camera_control 或 VBench-2.0 Human_Anatomy，可加 --minimal 节省 ~10 分钟：
+# bash scripts/post_install.sh --minimal
+
+# 7. 验证
+videvalkit doctor
+```
+
+为什么 tarball 路径比 `conda env create` 快：完全没有依赖解析。Tarball 是一个已通过端到端测试的环境的逐字节快照，解压 + 修正路径 + 直接使用。
+
+### 3.2 通过 Docker 镜像安装
+
+Docker 镜像由同一个 tarball 加上本仓库源码构建得到。前置条件：宿主机已安装 Docker + [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html)。
+
+```bash
+# 1. 拉取镜像（一次性，~15-25 GB）
+docker pull ghcr.io/videogenevalkit/videogenevalkit:0.1.0
+
+# 2. 验证 GPU 与 CLI 在容器内可用
+docker run --rm --gpus all \
+    ghcr.io/videogenevalkit/videogenevalkit:0.1.0 \
+    list benchmarks
+
+# 3. 运行一次评测（挂载视频目录与持久缓存目录，用于 HF 数据）
+docker run --rm --gpus all \
+    -v ~/videvalkit-cache:/root/.cache/videvalkit \
+    -v $PWD:/workspace \
+    ghcr.io/videogenevalkit/videogenevalkit:0.1.0 \
+    eval --bench worldjen \
+         --videos /workspace/videos \
+         --workspace /workspace/runs/first \
+         --models Kling \
+         --judge gemma-4-31b-local
+```
+
+镜像在运行时是只读的 — 任何需要写入的目录（workspace、获取到的 smoke 数据、生成输出等）都必须通过 `-v` 挂载宿主机目录。各 benchmark 的挂载模式见 §6。
+
+### 3.3 通过 conda yaml 安装环境（实验性，可能失败）
+
+此路径尝试从零开始通过 pip 解析器重建环境。**已知不稳定**：测试中曾连续遇到 10+ 次传递依赖冲突，因为原始环境使用了大量 `pip install --no-deps` 覆盖，标准 pip 解析器无法复现。除非你在贡献环境栈，否则请优先使用 3.1 或 3.2。
 
 ```bash
 git clone https://github.com/videogenevalkit/videogenevalkit.git
 cd videogenevalkit
-```
-
-### 3.2 创建 conda 环境
-
-工具集为全部六个适配器提供一份共享 conda 环境。
-
-```bash
-conda env create -f envs/videvalkit.yaml
-conda activate videvalkit
-```
-
-首次创建大约耗时 10-15 分钟（CUDA wheel、vLLM、mmcv、detectron2、lietorch 等）。若 `detectron2` 编译失败，请安装与你的 CUDA 版本匹配的预编译 wheel；若 `flash-attn` 报 ABI 不匹配，请固定为 `flash-attn==2.5.8 --no-build-isolation`。
-
-### 3.3 安装本包
-
-```bash
+conda env create -f envs/videvalkit.yaml -p /tmp/videvalkit-env
+conda activate /tmp/videvalkit-env
 pip install -e .
+bash scripts/post_install.sh
+videvalkit doctor
 ```
 
-该命令将 `videvalkit` 命令行接口装入当前激活的 conda 环境。可通过以下方式验证：
+常见失败点（测试期间遇到的）：
+- `mmcv` 从源码构建失败：去掉版本固定，使用 OpenMMLab 的预编译 wheel 索引。
+- `aliyun-python-sdk-core`、`crcmod`、`droid_backends`：未发布到 PyPI — 已从 lock 中移除并迁移到 `scripts/post_install.sh`。
+- `triton 3.7.0` 与 `torch 2.3.1` 的依赖冲突：去掉 triton 的固定。
+- `pillow 12.2.0` 与另外五个包冲突：降级或去掉固定。
 
-```bash
-which videvalkit
-videvalkit --help
-```
+如果你遇到新的冲突，最快的解决办法是切换到路径 3.1。
 
 ### 3.4 验证环境
 
@@ -111,7 +175,7 @@ videvalkit --help
 videvalkit doctor
 ```
 
-`doctor` 会检查：conda 环境名、CUDA 可见性、GPU 显存、HF 缓存位置、smoke 数据是否就绪，以及任何已配置 judge endpoint（端点）的可达性。正常输出全部为绿色检查；任何红色项都会阻塞依赖它的评测。
+`doctor` 会检查：环境激活、CUDA 可见性、GPU 显存、HF 缓存位置、smoke 数据是否就绪，以及任何已配置 judge endpoint（端点）的可达性。正常输出全部为绿色检查；任何红色项都会阻塞依赖它的评测。
 
 ---
 
