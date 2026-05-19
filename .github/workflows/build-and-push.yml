@@ -1,0 +1,95 @@
+# Build the Docker image and push to GitHub Container Registry (ghcr.io).
+#
+# Triggers:
+#   * On a git tag matching v* (e.g. v0.1.0) → build + push image as 0.1.0 + latest
+#   * Manual via "Run workflow" UI button on the Actions tab
+#
+# Required secrets:
+#   * HF_TOKEN — to download the env tarball from videogenevalkit/env-tarball on HF.
+#     Create at https://github.com/videogenevalkit/videogenevalkit/settings/secrets/actions
+#     Token only needs read access to the HF dataset (no write).
+#
+# Required for ghcr.io push: the workflow uses the auto-provisioned GITHUB_TOKEN.
+# Ensure repo settings: Settings -> Actions -> General -> Workflow permissions:
+#   "Read and write permissions" must be enabled.
+
+name: Build and push Docker image
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag to build (e.g. 0.1.0)"
+        required: true
+        default: "0.1.0"
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}    # videogenevalkit/videogenevalkit
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "value=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Free up runner disk space
+        run: |
+          # ubuntu-latest runners have ~14 GB free by default; we need ~25 GB
+          # for a 6 GB tarball + 15 GB image. Trim Android SDK, .NET, ghc.
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                       /opt/hostedtoolcache/CodeQL /usr/local/share/boost
+          df -h
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download env tarball from HF
+        run: |
+          pip install --upgrade huggingface_hub
+          export HF_TOKEN="${{ secrets.HF_TOKEN }}"
+          hf download videogenevalkit/env-tarball videvalkit-env.tar.gz \
+            --local-dir . \
+            --token "$HF_TOKEN"
+          ls -la videvalkit-env.tar.gz
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.value }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache,mode=max
+
+      - name: Summary
+        run: |
+          echo "Image pushed: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.value }}"
+          echo "Pull with:"
+          echo "  docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.tag.outputs.value }}"

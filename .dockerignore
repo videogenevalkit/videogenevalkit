@@ -1,0 +1,32 @@
+# What NOT to include in the docker build context
+.git/
+.github/
+.gitignore
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.so
+
+# Workspaces, runs, caches — never bake into image
+runs/
+workspaces/
+validation/leaderboard_runs/
+validation/reference_videos/
+validation/upstream_repos/
+validation/upstream_ckpts/
+
+# Local secrets
+.env
+.env.local
+*.token
+hf_token
+
+# IDE
+.idea/
+.vscode/
+.DS_Store
+
+# Already covered: the env tarball goes via --build-arg ENV_TARBALL, not COPY .
+# but if it's in the build context, don't double-include large files
+*.tar.gz
+!videvalkit-env.tar.gz
