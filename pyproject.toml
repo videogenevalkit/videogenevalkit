@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "videvalkit"
+version = "0.1.0"
+description = "Unified evaluation toolkit for text-to-video generation: VBench v1, VBench-2.0, Video-Bench, WorldJen, WorldScore, T2V-CompBench"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "videogenevalkit contributors" }]
+keywords = ["video-generation", "evaluation", "benchmark", "text-to-video", "vbench", "vbench2", "worldscore", "t2v-compbench"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "pydantic>=2.5",
+    "aiohttp>=3.9",
+    "pyyaml>=6.0",
+    "click>=8.1",
+    "tqdm>=4.66",
+    "numpy>=1.24",
+    "huggingface_hub>=0.24",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4", "ruff>=0.4"]
+
+[project.urls]
+Homepage = "https://github.com/videogenevalkit/videogenevalkit"
+Documentation = "https://github.com/videogenevalkit/videogenevalkit/tree/main/docs"
+Repository = "https://github.com/videogenevalkit/videogenevalkit"
+"Smoke data" = "https://huggingface.co/datasets/videogenevalkit/smoke-data"
+"Checkpoints" = "https://huggingface.co/datasets/videogenevalkit/checkpoints"
+
+[project.scripts]
+videvalkit = "videvalkit.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"videvalkit" = ["benchmarks/*/prompts/*.txt", "benchmarks/*/prompts/*.json", "benchmarks/*/prompts/*.jsonl"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]

@@ -1,0 +1,56 @@
+# videvalkit conda env — production layout: small yaml + pinned lock file.
+#
+# The lock file (envs/requirements-lock.txt) captures 348 pip packages at the
+# exact versions that produced the TEST_MANUAL.md validation results. Don't
+# loosen the pins — VBench-2.0 Instance_Preservation in particular requires
+# specific versions of transformers / tokenizers / peft / ms-swift /
+# qwen-vl-utils that pip's default resolver would not pick (see TEST_MANUAL
+# §4.2 "Dependency stack").
+#
+# Quick install:
+#   conda env create -f envs/videvalkit.yaml -p /tmp/videvalkit-env
+#   conda activate /tmp/videvalkit-env
+#   pip install -e .                                # install the toolkit itself
+#   bash scripts/post_install.sh                    # 6 git/wheel installs that need torch present
+#   videvalkit fetch-upstream --all                 # clone 6 upstream benchmarks
+#   videvalkit fetch-smoke-data --all               # ~3 GB sample videos from HF
+#   videvalkit fetch-checkpoints --bench worldjen   # per-bench, ~125 GB for --all
+#   videvalkit doctor
+#
+# Pre-conditions on the host:
+#   * Linux x86_64
+#   * NVIDIA driver supporting CUDA 12.1+ (cu128 driver works too — torch
+#     just emits a "driver too old" warning)
+#   * conda installed
+#   * ~ 200 GB free disk for the full checkpoint fetch
+#
+# Reproduced from /pub/evaluation_group/ning/benchmark/envs/videvalkit/ on
+# 2026-05-19. Regenerate the lock with:
+#   pip list --format=freeze \
+#     | grep -vE '^(videvalkit|vbench|vbench-2-0|SAM-2|lietorch|groundingdino)==' \
+#     | grep -vE '^-e '                            \
+#     | sort > envs/requirements-lock.txt
+name: videvalkit
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - ffmpeg=8.0.1                  # conda-forge ffmpeg; runners shell out to ffprobe/ffmpeg
+  - pip:
+      # PyTorch CUDA 12.1 wheels (torch 2.3.1+cu121)
+      - --extra-index-url https://download.pytorch.org/whl/cu121
+      # OpenMMLab prebuilt-wheel index (mmcv 2.2.0 wheel for torch 2.3 + cu121)
+      - --find-links https://download.openmmlab.com/mmcv/dist/cu121/torch2.3.0/index.html
+      # PyTorch Geometric wheel index (torch_scatter etc. with +pt23cu121 build tag)
+      - --find-links https://data.pyg.org/whl/torch-2.3.0+cu121.html
+      # 344 pinned pip pkgs reproduced from the working env
+      - -r requirements-lock.txt
+      # Build-from-source / git-only packages (detectron2, SAM-2, GroundingDINO,
+      # segment-anything, lietorch, en_core_web_sm) are NOT installed here —
+      # they need torch already present, but conda env create's pip layer runs
+      # everything in one batch which means they get built before torch is
+      # importable. Install them via `scripts/post_install.sh` after this env
+      # is active. `videvalkit doctor` reports missing ones with the fix command.

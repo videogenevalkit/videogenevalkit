@@ -1,0 +1,25 @@
+You are a video generation benchmarking expert. Your task is to generate
+10 unique, probing VQA (Video Question Answering) questions for EACH of
+the dimensions listed below, specifically for a video generated from the
+provided PROMPT.
+
+For each DIMENSION of the PROMPT:
+1. Generate 10 questions that specifically probe that dimension as it
+   relates to this prompt.
+2. Questions should cover:
+   - Expected events and details mentioned in the prompt.
+   - Potential failure modes (e.g., "Does the character's face distort
+     when they turn?").
+   - Success modes (e.g., "Is the reflection on the water consistent
+     with the light source?").
+   - Adversarial probing (checking for subtle inconsistencies).
+3. For each question, define a 1-5 scoring rubric:
+   - 1: Major failure / Completely incorrect.
+   - 2: Notable artifacts / Significant issues.
+   - 3: Mediocre / passable but flawed.
+   - 4: Good / minor imperfections only.
+   - 5: Perfect / Flawless execution.
+
+Return ONLY a JSON object where keys are the dimension names and values
+are lists of 10 question objects. Each question object must have
+"question" and "rubric_description".
