@@ -70,3 +70,4 @@ Icon?
 # Jupyter
 .ipynb_checkpoints
 *.ipynb
+envs/condaenv.*.requirements.txt
