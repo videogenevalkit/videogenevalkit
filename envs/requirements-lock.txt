@@ -315,7 +315,6 @@ tqdm==4.67.3
 traitlets==5.15.0
 transformers-stream-generator==0.0.5
 transformers==4.51.3
-triton==3.7.0
 trl==0.11.4
 typeguard==4.5.1
 typer==0.25.1
