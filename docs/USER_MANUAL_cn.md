@@ -1,0 +1,717 @@
+# videvalkit 用户手册
+
+| 字段 | 值 |
+|---|---|
+| 标题 | videvalkit 用户手册（中文版） |
+| Python 包名 | `videvalkit` |
+| GitHub 仓库 | `videogenevalkit` |
+| 读者 | 运行文本到视频（text-to-video, T2V）评测的研究人员、集成工程师及下游团队 |
+| 配套文档 | [DEV_MANUAL.md](DEV_MANUAL.md)（架构）- [TEST_MANUAL.md](TEST_MANUAL.md)（论文 Delta 复现验证） |
+
+本手册面向最终用户，介绍 `videvalkit` 的能力、安装方法、数据与权重准备、六个锚定基准的运行方式、judge（评判模型）配置以及 GPU 调度策略。内部架构请参考 DEV_MANUAL；论文 Delta 复现表格请参考 TEST_MANUAL。
+
+本文档为英文版的忠实翻译，目录结构完全一致。所有命令、代码及配置文件示例保持英文原样；技术名词在首次出现时给出中文简释。
+
+---
+
+## 目录
+
+1. [简介](#1-简介)
+2. [系统要求](#2-系统要求)
+3. [安装](#3-安装)
+4. [数据与权重准备](#4-数据与权重准备)
+5. [第一次评测](#5-第一次评测)
+6. [分基准操作指南](#6-分基准操作指南)
+7. [配置评分器（VLM/LLM judges）](#7-配置评分器vlmllm-judges)
+8. [配置 GPU](#8-配置-gpu)
+9. [跨基准聚合](#9-跨基准聚合)
+10. [独立度量](#10-独立度量)
+11. [生成你自己的视频](#11-生成你自己的视频)
+12. [自定义 prompt（自动标注器）](#12-自定义-prompt自动标注器)
+13. [故障排查与常见问题](#13-故障排查与常见问题)
+14. [许可证与引用](#14-许可证与引用)
+
+---
+
+## 1. 简介
+
+`videvalkit` 是面向文本到视频生成模型的统一评测工具集。一份配置、一个入口、六个基准（benchmark）。通过同一个命令行接口，你可以在 VBench v1、VBench-2.0、Video-Bench、WorldJen、WorldScore 与 T2V-CompBench 上对模型打分，并在同一个工作区（workspace）内完成跨基准对比。
+
+工具集已交付六个**锚定的**基准适配器（adapter），均处于生产可用状态：
+
+| 适配器 | 上游 | 评测维度 |
+|---|---|---|
+| `vbench` | Vchitect/VBench（CVPR 2024） | 16 维：7 维 quality + 9 维 semantic |
+| `vbench2` | Vchitect/VBench-2.0（CVPR 2025） | 18 维，覆盖 5 个类别（Creativity 创造性、Commonsense 常识、Controllability 可控性、Human Fidelity 人体保真、Physics 物理） |
+| `videobench` | Han 等，Video-Bench（CVPR 2025） | 9 维：4 维 alignment + 4 维 静态/动态 quality + video-text consistency |
+| `worldjen` | moonmath-ai/WorldJen | 16 维，按 motion_stability、logic_physics、instruction_adherence、aesthetic_quality 四个宏类分组；PHAS 聚合器 |
+| `worldscore` | Duan 等，WorldScore | 10 维：7 静态 + 3 动态；纯 CV 评分 |
+| `t2vcompbench` | Sun 等，T2V-CompBench V2（ECCV 2024） | 7 维组合性维度；LLaVA-1.6-34B + GD/SAM/DOT |
+
+另有 3 个补充适配器 stub（占位实现）将于后续版本中交付：Physics-IQ、VBench++、V-ReasonBench。它们已列入 `videvalkit list benchmarks --include-stubs`，但尚未达到生产可用状态。
+
+工具集**不**重写上游评分公式。每个适配器都按字节对齐（byte-for-byte）地调用上游包，仅在其上叠加 IO、调度（scheduling）、注册表（registry）、judge 接线与统一输出格式。TEST_MANUAL.md 中的验证清扫记录了与公开排行榜的 mean |Delta|：VBench v1 = 0.012，VBench-2.0 = 0.006，T2V-CompBench = 0.013（7 个维度中 6 个落在 +/-0.020 内）。各基准的复现表与分维 Delta 见 TEST_MANUAL 第 4 节。
+
+---
+
+## 2. 系统要求
+
+| 要求项 | 值 |
+|---|---|
+| 操作系统 | Linux x86_64（已在 CentOS/RHEL/Ubuntu 上验证） |
+| CUDA 驱动 | 12.1 或更高 |
+| GPU | 至少 1 块 NVIDIA GPU，显存 >= 24 GB。运行 T2V-CompBench 的 paper-mode（LLaVA-1.6-34B）则要求 >= 80 GB |
+| 内存 | >= 64 GB |
+| 磁盘 | 完整 smoke 数据 + 全部六个基准的 checkpoint 至少需要 200 GB 可用空间 |
+| conda | miniforge 或 miniconda，建议使用较新版本 |
+| 网络 | 能够 HTTPS 出站访问 huggingface.co 与 github.com |
+
+24 GB 的下限可覆盖 WorldJen、Video-Bench、VBench v1、VBench-2.0 与 toolkit 模式下的 WorldScore。T2V-CompBench 的 paper-mode（`--mode upstream`，使用打包的 LLaVA-1.6-34B MLLM）需要 80 GB 级别的 GPU（A100/H100）。若不具备，可改用 `--mode toolkit` 并指定较小的 VLM judge，但请接受 DEV_MANUAL 第 15.3.2 节所述的 paper-Delta 警告。
+
+仅 PSNR、SSIM 等成对度量支持纯 CPU 运行，所有基准都需要 GPU。
+
+---
+
+## 3. 安装
+
+### 3.1 克隆仓库
+
+```bash
+git clone https://github.com/videogenevalkit/videogenevalkit.git
+cd videogenevalkit
+```
+
+### 3.2 创建 conda 环境
+
+工具集为全部六个适配器提供一份共享 conda 环境。
+
+```bash
+conda env create -f envs/videvalkit.yaml
+conda activate videvalkit
+```
+
+首次创建大约耗时 10-15 分钟（CUDA wheel、vLLM、mmcv、detectron2、lietorch 等）。若 `detectron2` 编译失败，请安装与你的 CUDA 版本匹配的预编译 wheel；若 `flash-attn` 报 ABI 不匹配，请固定为 `flash-attn==2.5.8 --no-build-isolation`。
+
+### 3.3 安装本包
+
+```bash
+pip install -e .
+```
+
+该命令将 `videvalkit` 命令行接口装入当前激活的 conda 环境。可通过以下方式验证：
+
+```bash
+which videvalkit
+videvalkit --help
+```
+
+### 3.4 验证环境
+
+```bash
+videvalkit doctor
+```
+
+`doctor` 会检查：conda 环境名、CUDA 可见性、GPU 显存、HF 缓存位置、smoke 数据是否就绪，以及任何已配置 judge endpoint（端点）的可达性。正常输出全部为绿色检查；任何红色项都会阻塞依赖它的评测。
+
+---
+
+## 4. 数据与权重准备
+
+### 4.1 HuggingFace 鉴权（可选）
+
+工具集获取的多数 checkpoint 都是公开的。少数上游发布的参考视频集是 gated（需授权），需要一个 HuggingFace read-scope token（部分自动批准，部分需要人工审核）。注册方法：
+
+```bash
+hf auth login
+# 粘贴一个 read-scope token，来源： https://huggingface.co/settings/tokens
+```
+
+如果你处在企业代理之后或正在使用 HuggingFace 镜像，在拉取前设置 `HF_ENDPOINT`：
+
+```bash
+export HF_ENDPOINT=https://hf-mirror.com
+```
+
+### 4.2 拉取 smoke 数据
+
+工具集在同一个 HF 仓库（`videogenevalkit/smoke-data`）中托管了每个基准的代表性 prompt 子集与论文发布的参考视频。可一次性拉取全部六个，也可只取其一：
+
+```bash
+# 拉取全部 6 个基准的 smoke 数据（约 3 GB）
+videvalkit fetch-smoke-data
+
+# 或仅拉取单个基准
+videvalkit fetch-smoke-data --bench worldjen
+```
+
+smoke 数据默认落盘到 `~/.cache/videvalkit/smoke-data/<bench>/`。每个基准的 smoke 子集即为论文发布的官方视频集或其代表性子集（每基准约 50-200 个视频），足以端到端验证整条流水线，而无需多日 GPU 任务。
+
+### 4.3 拉取 checkpoints
+
+预训练 checkpoint 按基准拉取。各基准的体量（完整的逐维（per-dim）模型依赖映射见 DEV_MANUAL 第 15.3 节）：
+
+| Bench | 体量 | 说明 |
+|---|---:|---|
+| `vbench` | 7.7 GB | DINO、CLIP、AMT、RAFT、MUSIQ、GRiT、UMT、tag2text、ViCLIP |
+| `vbench2` | 23 GB | LLaVA-Video-7B + Qwen2.5-7B + Qwen2.5-VL-3B + CV 栈 |
+| `videobench` | 0 GB（自有） | 仅数据集；全部 9 维都使用你配置的 VLM judge |
+| `worldjen` | 16 GB | Gemma-4-31B + Qwen2.5-7B（打包到 `hf-models/`） |
+| `worldscore` | 6.3 GB | DROID-SLAM、SEA-RAFT、VFIMamba、SAM2、GroundingDINO、LAION |
+| `t2vcompbench` | 72 GB | LLaVA-1.6-34B（68 GB）+ GD + SAM-H + Depth-Anything V1 + DOT |
+
+```bash
+# 拉取单个基准的 checkpoint
+videvalkit fetch-checkpoints --bench worldscore
+
+# 拉取 t2vcompbench 但跳过 68 GB 的 LLaVA-1.6-34B MLLM 栈
+videvalkit fetch-checkpoints --bench t2vcompbench --skip-mllm-upstream
+
+# 拉取全部（约 110 GB）
+videvalkit fetch-checkpoints --all
+
+# 预览将下载哪些文件、各自多大，不真正下载
+videvalkit fetch-checkpoints --bench t2vcompbench --dry-run
+```
+
+注：`LLaVA-1.6-34B` 已打包但属可选。若 GPU 显存不足 80 GB，请加 `--skip-mllm-upstream`，并在 toolkit 模式下用较小 VLM judge 运行 T2V-CompBench。
+
+Checkpoint 默认落盘到 `~/.cache/videvalkit/checkpoints/<bench>/`。可用 `VIDEVALKIT_CHECKPOINT_ROOT` 覆盖。下载支持断点续传。
+
+---
+
+## 5. 第一次评测
+
+下面给出在 WorldJen 上端到端 smoke 运行的规范示例。WorldJen 是最稳妥的入门基准：50 条 prompt、每条 prompt 1 个视频、单 GPU 配合本地 Gemma judge 的整体墙钟时间约 1 小时。smoke 数据中已附带 `fal-ai_kling-video_v2.6_pro_text-to-video`（即 Kling v2.6）的视频。
+
+```bash
+videvalkit eval --bench worldjen \
+  --videos ~/.cache/videvalkit/smoke-data/worldjen/videos/fal-ai_kling-video_v2.6_pro_text-to-video \
+  --workspace runs/first \
+  --judge gemma-4-31b-local
+
+videvalkit aggregate --workspace runs/first
+
+cat runs/first/results/summary/worldjen/Kling.json
+```
+
+第一条命令以本地 Gemma-4-31B vLLM judge（端口 8003）跑 WorldJen 适配器。WorldJen 分两阶段：阶段 A 用 LLM 生成逐 prompt 的 VQA 问题；阶段 B 用 VLM 在采样帧上作答。smoke 数据中已附带预构建的 `vqa_questions_50prompts.jsonl`，默认情况下阶段 A 会被跳过；如需从头跑阶段 A，请参考第 7 节。
+
+`Summary` JSON 顶层有三个组：
+
+```json
+{
+  "benchmark": "worldjen",
+  "model": "Kling",
+  "n_videos": 50,
+  "headline": {"metric": "phas", "score": 3.6561},
+  "per_dimension": {
+    "subject_consistency": 3.782,
+    "scene_consistency":   3.718,
+    "motion_smoothness":   3.134,
+    "...": "..."
+  },
+  "overall": {
+    "PHAS": 3.6561,
+    "unweighted_dim_mean": 3.577,
+    "n_records": 800
+  },
+  "meta": {
+    "toolkit_commit": "abcd1234",
+    "upstream_pkg":   "worldjen==in-tree",
+    "judge":          "openai_compatible:google/gemma-4-31b-it",
+    "ckpt_checksums": {"...": "..."},
+    "runtime":        {"python": "3.10.13", "torch": "2.3.1+cu121"},
+    "scorers_used":   {"default": "gemma-4-31b-local"}
+  }
+}
+```
+
+`per_dimension` 是 16 个 WorldJen 维度的分数（1-5 分制）。`overall.PHAS` 是头条分数（带论文调参权重的 PHAS 聚合器）。`meta.scorers_used` 记录实际所用 judge，便于下游工具识别 judge 已被替换的运行。
+
+参照 TEST_MANUAL 第 4.3 节：本次 Kling smoke 运行 PHAS ~3.66，对比论文报告的 Gemma-judge 头条 4.12（Delta -0.47）。差距源自 decord 与 cv2 的取帧差异以及 Gemma 采样配置不同；流水线的正确性已在逐维层面验证。
+
+`aggregate` 步骤写入 `runs/first/results/leaderboard/cross_benchmark.json`（在工作区中含多个基准时尤为有用；单一基准时它只是把该基准的逐模型头条卷起）。
+
+---
+
+## 6. 分基准操作指南
+
+下面每个小节给出规范的调用方式、所打分维度、默认评分器以及该基准的注意事项。素材来源：DEV_MANUAL 第 15.3.1 节（逐维依赖）与 TEST_MANUAL 第 4 节（验证结果）。
+
+### 6.1 VBench v1
+
+```bash
+videvalkit eval --bench vbench \
+  --videos ~/.cache/videvalkit/smoke-data/vbench/videos/<model> \
+  --workspace runs/vbench
+```
+
+16 维，7 quality + 9 semantic。所有维度都是纯 CV（无需 VLM judge）。各维默认评分器：`subject_consistency` 用 DINO ViT-B/16，`background_consistency` 用 CLIP ViT-B/32，`motion_smoothness` 用 AMT-S，`dynamic_degree` 用 RAFT，`imaging_quality` 用 MUSIQ，`object_class`/`color`/`multiple_objects`/`spatial_relationship` 用 GRiT，`human_action` 用 UMT，`scene` 用 tag2text，`appearance_style`/`temporal_style`/`overall_consistency` 用 ViCLIP，`aesthetic_quality` 用 LAION-aesthetic + CLIP ViT-L/14。聚合器为 `vbench_weighted`：`Total = 0.54*Quality + 0.46*Semantic`。
+
+注意事项：`dynamic_degree` 是噪声最大的一维（RAFT 在 GPU 上的非确定性），该维容忍带需放宽至 +/-0.025。`human_action` 依赖 YOLOv5x 权重；请用 `checksums.json` 校验 SHA-256。对于依赖 prompt 的维度（`object_class`、`color`、`spatial_relationship`、`scene`、`human_action`、`multiple_objects`），自定义 prompt 必须携带 `auxiliary_info` 标签；若无，请使用自动标注器（见第 12 节）。
+
+验证：HunyuanVideo 全集清扫，16/16 维都落在 +/-0.025 内；与 HF 排行榜的 mean |Delta| 为 0.012。
+
+### 6.2 VBench-2.0
+
+```bash
+videvalkit eval --bench vbench2 \
+  --videos ~/.cache/videvalkit/smoke-data/vbench2/videos/<model> \
+  --workspace runs/vbench2 \
+  --judge local-llava-video-7b
+```
+
+18 维，分 5 个类别（Creativity、Commonsense、Controllability、Human Fidelity、Physics）。12 个推理维使用 LLaVA-Video-7B-Qwen2 作为 VLM 评分器；其中 5 维额外引入 Qwen2.5-7B-Instruct 作为 LLM judge。其余 6 维使用打包的 CV 栈：`camera_motion` 与 `multi_view_consistency` 用 CoTracker3；`diversity` 用 VGG-19；`human_anatomy` 用打包的 ViTDetector；`human_identity` 用 ArcFace + RetinaFace；`instance_preservation` 用 Qwen2.5-VL-3B（经 ms-swift）。聚合器为 `vbench2_category`：5 个类别均值再算术平均得 `Overall`。
+
+注意事项：`Human_Anatomy` 与 `Human_Identity` **不可**替换为其他 VLM（打包的检测器）。`Diversity` 至少需要每条 prompt 2 个 seed。HunyuanVideo 全集清扫的 mean |Delta| 为 0.0055（18/18 维），前提是已应用 cv2 顺序读帧修复与 `-1` 哨兵过滤。默认 judge 为 `local-llava-video-7b`；可通过 `--scorer-vlm gemma-4-31b-local` 替换为更强的推理模型（paper-Delta 容忍带会变宽，参见第 7 节）。
+
+### 6.3 Video-Bench
+
+```bash
+videvalkit eval --bench videobench \
+  --videos ~/.cache/videvalkit/smoke-data/videobench/videos/<model> \
+  --workspace runs/videobench \
+  --judge gpt-4o
+```
+
+9 维：4 维 alignment（`video_text_consistency`、`object_class_consistency`、`color_consistency`、`action_consistency`、`scene_consistency`），1-3 分制；4 维 quality（`imaging_quality`、`aesthetic_quality`、`temporal_consistency`、`motion_effects`），1-5 分制。9 维共用**同一个** VLM judge——这是按模型数计算最简单的基准。论文使用 GPT-4o（`gpt-4o-2024-08-06`）；工具集默认注册的是 `gpt-4o-2024-11-20`。聚合器为 `videobench_per_dim`：在链式查询（chain-of-query）响应上做算术平均。
+
+注意事项：GPT-4o 快照存在漂移；如要复现论文，请新建 `gpt-4o-2024-08-06` 条目（见第 7 节）并使用 `--judge gpt-4o-2024-08-06`。用 Gemma 替代 GPT-4o 会在 1-5 分制下让动态质量维度漂移 +/-2.0 点（`temporal_consistency` 与 `motion_effects` 在 Gemma 下呈双峰分布）。静态与对齐维度在 Gemma 下与论文相差不超过 +/-0.2。
+
+### 6.4 WorldJen
+
+```bash
+videvalkit eval --bench worldjen \
+  --videos ~/.cache/videvalkit/smoke-data/worldjen/videos/<model> \
+  --workspace runs/worldjen \
+  --judge gemma-4-31b-local
+```
+
+16 维，分 4 个宏类（motion_stability、logic_physics、instruction_adherence、aesthetic_quality）。两阶段：阶段 A 用 LLM 生成 VQA 问题（默认 `qwen3-32b-local`，端口 8004）；阶段 B 用 VLM 作答（默认 `gemma-4-31b-local`，端口 8003）。聚合器为 `phas`：分维均值的加权和减去方差项，权重为论文校准值。
+
+注意事项：若工作区已存在 `vqa_questions_50prompts.jsonl`，阶段 A 会被静默跳过——日志中 "judge_llm not given; defaulting to judge for VQA gen" 这一行在文件存在性检查之前就会无条件输出，不能据此判断阶段 A 是否真的跑了。请查看 `<ws>/api_logs/calls/Qwen/` 以确认。对 Gemma 请保持 `max_concurrency=2`，避免 broken-pipe 报错洪流；阶段 A 在 Qwen 上很轻量，可与重负载的阶段 B 并行不冲突。
+
+### 6.5 WorldScore
+
+```bash
+videvalkit eval --bench worldscore \
+  --videos ~/.cache/videvalkit/smoke-data/worldscore/videos/<model> \
+  --workspace runs/worldscore
+```
+
+10 维：7 静态（`camera_control`、`object_control`、`content_alignment`、`3d_consistency`、`photometric_consistency`、`style_consistency`、`subjective_quality`）+ 3 动态（`motion_accuracy`、`motion_magnitude`、`motion_smoothness`）。全部 CV 评分，无需 VLM judge。技术栈：DROID-SLAM（相机 + 3D）、SEA-RAFT（光流 + 光度一致性）、VFIMamba（基于插帧的 motion smoothness）、SAM2（motion-accuracy 掩膜传播）、GroundingDINO + SAM-H（目标检测）、VGG-19（风格 Gram）、LAION + CLIP-IQA+（主观质量）、torchmetrics CLIPScore（内容对齐）。头条指标：`WorldScore-Static`（7 维静态分均值 × 100）与 `WorldScore-Dynamic`（10 维均值 × 100）。
+
+注意事项：`style_consistency` 对比的是 HF 数据集中提供的 `input_image.png`，**不是**生成视频的第 0 帧；对 T2V 模型而言，参考图由上游 T2I 流水线在相同场景 prompt 上生成。评测前请先跑一次 `runners/extract_refs.py` 以物化逐条目（per-entry）参考图。请把 torch 钉在 `2.3.1+cu121`；安装 `mamba_ssm` 时**不要**让 pip 自动升级 torch（升级会破坏 lietorch/droid_backends/sam2/pyiqa）。适配器内置纯 PyTorch 的 `mamba_ssm.selective_scan` shim，无需重编译 CUDA 扩展即可运行 VFIMamba。
+
+### 6.6 T2V-CompBench
+
+```bash
+# Paper-exact 模式（LLaVA-1.6-34B 子进程 shim，要求 >=80 GB GPU）
+videvalkit eval --bench t2vcompbench \
+  --videos ~/.cache/videvalkit/smoke-data/t2vcompbench/videos/<model> \
+  --workspace runs/t2vcomp_upstream \
+  --mode upstream
+
+# Toolkit 模式（可配置 VLM judge，可在较小 GPU 上运行）
+videvalkit eval --bench t2vcompbench \
+  --videos ~/.cache/videvalkit/smoke-data/t2vcompbench/videos/<model> \
+  --workspace runs/t2vcomp_toolkit \
+  --mode toolkit \
+  --judge gemma-4-31b-local
+```
+
+7 维组合性维度。4 维 MLLM（`consistent_attribute`、`action_binding`、`object_interactions`、`dynamic_attribute`）使用 LLaVA-1.6-34B，temperature=0，chatml_direct 对话模板，3 seed 取均值。3 维 CV：`generative_numeracy`（GD + 计数）、`spatial_relationships`（GD + Depth-Anything V1，2D+3D 联合）、`motion_binding`（GD + SAM-H + DOT = cotracker2 + RAFT estimator + RAFT refiner）。聚合器：7 维无权均值。
+
+注意事项：`--mode upstream` 是 paper-exact 路径（LLaVA-1.6-34B 子进程 shim），是按字节复现论文 Delta 所必需。`--mode toolkit` 将 4 维 MLLM 路由到你配置的 VLM judge——在 GPU 显存不足 80 GB 时有用，但会接受被记录到 `meta.scorers_used` 的 paper-Delta 警告。验证：在 upstream 模式下，7 维中 6 维与论文 Table 5 相差 +/-0.020 内；`consistent_attribute` 出现 +0.186 漂移，归因于 LLaVA HEAD 修订漂移（论文的 requirements.txt 未钉住 revision）。
+
+---
+
+## 7. 配置评分器（VLM/LLM judges）
+
+参考 DEV_MANUAL 第 16 节。Judges（评判模型）是可插拔的：每个需要调用 VLM/LLM 的基准都通过 `SUPPORTED_JUDGES` 注册表以及一条优先级链完成路由，让你无需 fork 工具集即可逐主机覆写。
+
+### 优先级链（从低到高）
+
+1. `src/videvalkit/configs/judges.py` 中的内置 `SUPPORTED_JUDGES` 默认值
+2. 环境变量默认值（如 `VIDEVALKIT_JUDGE_DEFAULT`）
+3. `~/.config/videvalkit/judges.yaml`——用户级覆写与新增 judge 名称
+4. `<workspace>/judges.yaml`——按项目钉死
+5. CLI 标志——最高优先级：`--judge`、`--judge-endpoint`、`--judge-model`、`--judge-kind`、`--judge-api-key-env`
+
+### 端口 8003 / 8004 的本地 vLLM Gemma / Qwen
+
+```yaml
+# ~/.config/videvalkit/judges.yaml
+gemma-4-31b-local:
+  kind: openai_compatible
+  endpoint: http://localhost:8003/v1
+  model: google/gemma-4-31b-it
+  provider: google
+  api_key_env: null
+  request_timeout_s: 180
+
+qwen3-32b-local:
+  kind: openai_compatible
+  endpoint: http://localhost:8004/v1
+  model: Qwen/Qwen3-32B
+  provider: Qwen
+  api_key_env: null
+```
+
+启动对应的 vLLM 服务（一次性启动后保持驻留）：
+
+```bash
+CUDA_VISIBLE_DEVICES=0 python -m vllm.entrypoints.openai.api_server \
+  --model google/gemma-4-31b-it --port 8003 \
+  --max-model-len 32768 --gpu-memory-utilization 0.85 \
+  --served-model-name google/gemma-4-31b-it &
+
+CUDA_VISIBLE_DEVICES=1 python -m vllm.entrypoints.openai.api_server \
+  --model Qwen/Qwen3-32B --port 8004 \
+  --max-model-len 32768 --gpu-memory-utilization 0.85 \
+  --served-model-name Qwen/Qwen3-32B &
+```
+
+`--served-model-name` 必须与 YAML 的 `model` 字段按字节一致；vLLM 通过该名称路由。
+
+### OpenAI GPT-4o
+
+```yaml
+# ~/.config/videvalkit/judges.yaml
+gpt-4o:
+  kind: openai_compatible
+  endpoint: https://api.openai.com/v1
+  model: gpt-4o-2024-11-20
+  provider: openai
+  api_key_env: OPENAI_API_KEY
+  cost_per_million_input_tokens: 2.50
+  cost_per_million_output_tokens: 10.00
+  cost_per_image_input: 0.00765
+
+gpt-4o-2024-08-06:           # 用于复现 Video-Bench 论文
+  kind: openai_compatible
+  endpoint: https://api.openai.com/v1
+  model: gpt-4o-2024-08-06
+  provider: openai
+  api_key_env: OPENAI_API_KEY
+```
+
+```bash
+export OPENAI_API_KEY=sk-...
+videvalkit eval --bench videobench --judge gpt-4o-2024-08-06 ...
+```
+
+### Gemini（Google AI Studio）
+
+```yaml
+gemini-3-flash:
+  kind: gemini
+  model: gemini-3-flash-preview
+  provider: google
+  api_key_env: GEMINI_API_KEY
+  cost_per_million_input_tokens: 0.075
+  cost_per_million_output_tokens: 0.30
+```
+
+```bash
+export GEMINI_API_KEY=...
+```
+
+### Anthropic Claude
+
+```yaml
+claude-sonnet-4-6:
+  kind: anthropic
+  model: claude-sonnet-4-6
+  provider: anthropic
+  api_key_env: ANTHROPIC_API_KEY
+```
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+```
+
+### CLI 选择
+
+```bash
+# 全基准 judge 替换
+videvalkit eval --bench vbench2 --videos ... \
+  --scorer-vlm gemma-4-31b-local        # 代替默认 lmms-lab/LLaVA-Video-7B-Qwen2
+
+# 逐维覆写（混搭）
+videvalkit eval --bench vbench2 --videos ... \
+  --scorer-vlm gemma-4-31b-local \
+  --scorer-vlm-dim complex_plot=claude-sonnet-4-6 \
+  --scorer-vlm-dim human_interaction=gpt-4o-2024-11-20
+
+# 临时 endpoint 覆写（无需改 YAML）
+videvalkit eval --bench videobench --videos ... \
+  --judge-kind openai_compatible \
+  --judge-endpoint http://10.0.1.7:9001/v1 \
+  --judge-model Qwen/Qwen3-32B \
+  --judge-api-key-env null
+```
+
+当你替换某基准的论文默认评分器时，工具集会：
+1. 把实际所用评分器写入 `Summary.meta.scorers_used`。
+2. 在 `compare-leaderboard` 输出中拒绝声称 Delta-vs-paper。
+3. 若你传入 `--allow-judge-substitution`，则将容忍带放宽 3 倍。
+4. 在 `api_logs/` 中逐次调用记录 token 用量。
+
+运行后可查看花费：
+
+```bash
+videvalkit api-usage --workspace runs/first
+```
+
+---
+
+## 8. 配置 GPU
+
+参考 DEV_MANUAL 第 17 节。三种调度模式：
+
+| 模式 | 触发方式 | 行为 |
+|---|---|---|
+| `single` | `--gpu N` | 整个基准在单一设备上跑 |
+| `dim_parallel` | `--gpus 0,1,2`（或 `auto`） | 维度分片到 GPU 池中，每个维度作为独立子进程，并设置 `CUDA_VISIBLE_DEVICES=N` |
+| `affinity` | `--gpu-affinity Dim=N,...` | 用户钉特定维度到特定 GPU；其余维度回落到 GPU 池 |
+
+模式根据传入标志推断；没有显式的 `--mode` 切换开关。
+
+### 单 GPU 示例
+
+```bash
+videvalkit eval --bench worldjen --gpu 2 --videos ... --workspace ...
+```
+
+### 维度并行示例（VBench-2.0 的 18 维分到 3 张 GPU）
+
+```bash
+videvalkit eval --bench vbench2 --videos ... --gpus 0,1,2 --gpu-strategy most_free_memory
+```
+
+### 亲和示例（把 LLaVA-34B 维度钉到专属 GPU）
+
+```bash
+videvalkit eval --bench t2vcompbench --videos ... \
+  --gpu-affinity consistent_attribute=0,action_binding=1,object_interactions=2 \
+  --gpus 3                                # 其他维度回落到 GPU 3
+```
+
+### 自动选择策略
+
+| 策略 | 在获取时选择的 GPU |
+|---|---|
+| `most_free_memory`（默认） | `argmax(free_mem_gb)` |
+| `round_robin` | GPU 池的下一个索引 |
+| `least_utilization` | `argmin(utilization_percent)` |
+
+通过 `--gpu-strategy {most_free_memory, round_robin, least_utilization}` 传入，或写入 YAML。
+
+### 通过 `compute.yaml` 设定持久默认值
+
+```yaml
+# ~/.config/videvalkit/compute.yaml
+compute:
+  gpus: auto                              # 对所有基准默认
+  auto_strategy: most_free_memory
+  reserve_mem_gb: 6                       # 不挑选剩余 <6 GB 的 GPU
+```
+
+逐工作区的覆写写入 `<workspace>/config.yaml`，schema 一致，并额外提供 `compute.affinity` 段，用于 `benchmark.dim` 形式的钉死。
+
+调度器在工作区中写入 `compute_log.jsonl`，每次维度启动一行，与 `api_log.jsonl` 联动，用以回答“本次评测花了多少？”——既包含 GPU 分钟数也包含 token 花费。
+
+最小显存提示已写入各基准 manifest（例如 T2V-CompBench 的 `consistent_attribute` 要求 `min_mem_gb=75, exclusive=True`）；调度器拒绝把不满足提示的维度调度到对应 GPU。
+
+---
+
+## 9. 跨基准聚合
+
+当工作区中包含一个或多个基准的 summary 文件时，可将它们聚合成统一榜单：
+
+```bash
+videvalkit aggregate --workspace runs/first
+# 输出文件：
+#   runs/first/results/leaderboard/cross_benchmark.json
+# 控制台：
+#   #1  seedance20         z=+0.521
+#   #2  pangu_model3_141   z=+0.183
+#   #3  wan-14B-pe-141     z=-0.704
+```
+
+工具集内置五种聚合器：
+
+| 聚合器 | 行为 |
+|---|---|
+| `weighted_sum` | 用户在维度/基准层面指定权重 |
+| `vbench_weighted` | `Total = 0.54 * Quality + 0.46 * Semantic`，VBench v1 头条 |
+| `vbench2_category` | 5 类别均值再均值得 `Overall`，VBench-2.0 头条 |
+| `phas` | PHAS = `Sum(w_i * mu_i) - lambda * sigma^2`，WorldJen 头条 |
+| `bt` | 跨模型的 Bradley-Terry 两两比较排序，`videvalkit aggregate` 跨基准用 |
+
+通过 `aggregate` 的 `--aggregator <name>` 切换，默认 `weighted_sum`，基准间等权。
+
+跨基准输出 schema：
+
+```json
+{
+  "models": ["seedance20", "pangu_model3_141", "wan-14B-pe-141"],
+  "ranked": [
+    {"model": "seedance20", "z_score": 0.521, "per_bench": {"worldjen": 4.12, "vbench": 0.815, "..."}}
+  ],
+  "bt_rating": {"seedance20": 1.42, "...": "..."},
+  "meta": {"aggregator": "weighted_sum", "n_benches": 3, "...": "..."}
+}
+```
+
+---
+
+## 10. 独立度量
+
+参考 DEV_MANUAL 第 14 节。独立度量（standalone metrics）在两组视频上计算单一算法——没有 prompt、没有维度、没有聚合器。适合不需要基准脚手架，只要一个数字（FID、FVD、CLIP-Score、PSNR、SSIM、LPIPS）的场景。
+
+```bash
+videvalkit metric \
+  --name fvd \
+  --gen-videos path/to/generated/ \
+  --ref-videos path/to/reference/ \
+  --device cuda:0 \
+  --out fvd_result.json
+```
+
+支持的度量：
+
+| 度量 | 需要参考集 | 备注 |
+|---|---|---|
+| `fid` | 是 | clean-fid / pytorch-fid（Inception-V3 pool3） |
+| `fvd` | 是 | 标准 I3D Kinetics-400 |
+| `clipscore` | 否 | OpenAI CLIP ViT-B/32 |
+| `psnr` | 是 | 成对视频 PSNR |
+| `ssim` | 是 | 成对视频 SSIM |
+| `lpips` | 是 | AlexNet 或 VGG 主干 |
+
+注：独立度量模块属于 planned-2026-05-18 通道；注册表与 CLI 已接线，FVD/FID/CLIP-Score 现可使用；PSNR/SSIM/LPIPS 已排期，优先级见 DEV_MANUAL 第 14 节。
+
+返回一个扁平 JSON：`{"fvd": 132.4, "n_gen": 200, "n_ref": 200, "backbone": "i3d-k400", ...}`。
+
+---
+
+## 11. 生成你自己的视频
+
+若你有自己的 T2V 模型，请将生成结果按各基准的预期 layout（目录结构）组织到一个根目录下：
+
+```
+<videos_root>/
+  <model_name>/
+    <prompt_id>.mp4
+    ...
+```
+
+各基准预期 layout（完整规范见 DEV_MANUAL 第 4 节）：
+
+| Bench | Layout |
+|---|---|
+| `vbench` | `<root>/<model>/<prompt_id>-<sample_idx>.mp4`（每 prompt 5 个采样） |
+| `vbench2` | `<root>/<model>/<dim>/<prompt_id>-<sample_idx>.mp4`（按维度组织，每 prompt 1-3 个采样，视维度而定） |
+| `videobench` | `<root>/<model>/<dim>/<prompt_id>.mp4`（按维度组织；上游 zip 包也遵循该结构） |
+| `worldjen` | `<root>/<model>/<prompt_id>.mp4`（每 prompt 1 个采样） |
+| `worldscore` | `<root>/<model>/{static,dynamic}/<prompt_id>.mp4`（按 split 组织） |
+| `t2vcompbench` | `<root>/<model>/<dim>/<prompt_id>.mp4`（按维度组织，完整运行每维度 200 prompt） |
+
+布好后将 `<videos_root>` 传给 `videvalkit eval --videos <root>`，适配器会按预期 layout 遍历。逐基准 prompt 文件位于 `~/.cache/videvalkit/smoke-data/<bench>/prompts/`（用于复现论文），自定义 prompt 则通过 `--prompts-file <path>` 传入。
+
+resume（断点续算）是默认行为：重跑相同命令会跳过已有 `results/raw/*.json` 的 `(model, dim, prompt)` 三元组。如需强制重跑，请删除对应 JSON。
+
+---
+
+## 12. 自定义 prompt（自动标注器）
+
+VBench v1 与 VBench-2.0 中依赖 prompt 的维度（`object_class`、`color`、`spatial_relationship`、`scene`、`human_action`、`multiple_objects`，以及 VBench-2.0 的多数维度）需要每条 prompt 上携带 `auxiliary_info` 标签——上游代码据此组装检测/匹配 prompt。自定义 prompt 默认没有这些标签。
+
+自动标注器借助本地 LLM 补齐缺口：
+
+```bash
+python scripts/auto_label_prompts.py \
+  --prompts /data/my_prompts/prompts.jsonl \
+  --out-dir runs/my_ws/prompts/auto_labels \
+  --benchmarks vbench,vbench2 \
+  --judge qwen3-32b-local
+```
+
+输出目录下生成 `vbench_full_info.json` 与 `vbench2_full_info.json`，每条 prompt 一项，附带自动抽取的 `auxiliary_info` 块。逐维度的 LLM schema 打包在 `videvalkit/prompt_labelers/` 中。
+
+使用自动标注后的文件：
+
+```bash
+videvalkit eval --bench vbench \
+  --prompts-file runs/my_ws/prompts/auto_labels/vbench_full_info.json \
+  --videos ... --workspace ...
+```
+
+注意事项：自动标注效果良好但并非完美。局限性见 TEST_MANUAL 第 2.4 节。如要主张 paper-Delta，请始终使用上游原版 prompt。
+
+---
+
+## 13. 故障排查与常见问题
+
+请先运行 `videvalkit doctor`，多数问题会一目了然。
+
+| 表现 | 可能原因 | 处理 |
+|---|---|---|
+| `fetch-checkpoints` 时 HF 鉴权失败 | 未设置 token，或网络走的 HF 镜像会丢文件 | 用 read-scope token 运行 `hf auth login`；若走镜像，`export HF_ENDPOINT=https://hf-mirror.com`。WorldScore 的 parquet 必须从 `huggingface.co` 直拉（镜像会丢） |
+| 拉取过程中磁盘耗尽 | `~/.cache/videvalkit` 落在了小分区 | 拉取前 `export VIDEVALKIT_CACHE_ROOT=/data/videvalkit_cache`；完整 smoke + ckpt 体量约 130 GB |
+| LLaVA-1.6-34B 在 <80 GB GPU 上 OOM | T2V-CompBench paper-mode 要求 80 GB | 改用 `--mode toolkit --judge gemma-4-31b-local`（paper-Delta 容忍带变宽） |
+| Judge endpoint 不可达 | vLLM 未运行，或 `--served-model-name` 与注册表的 `model` 字段不匹配 | `curl http://host:port/v1/models | jq` 查看真实名称；对齐注册表或启动参数 |
+| `cv2` 在 H.264 论文视频上取错帧 | 稀疏关键帧 seek bug | 已在 `utils/video.py:extract_frames` 修复（用顺序 `cap.read()` 配合 `wanted_set` 替代 `cap.set(CAP_PROP_POS_FRAMES)`）。如发现重复帧，请确认工具集版本不低于 0.0.1 post-2026-05-18 |
+| WorldJen 阶段 A 总不跑 | 工作区已存在预构建 `vqa_questions_50prompts.jsonl` | 阶段 A 会被静默跳过。若要强制跑，请删除该文件或加 `--no-prebuilt-vqa` |
+| 并发下 Gemma 出现 `broken pipe / RemoteProtocolError` | 对 vLLM 的并发突发 | 对所有依赖 Gemma 的基准设置 `--max-concurrency 2`；将共用 Gemma 的基准错峰运行 |
+| 安装时 `detectron2` 编译失败 | `nvcc --version` 与 `torch.version.cuda` 不匹配 | 安装与你 CUDA 匹配的预编译 detectron2 wheel |
+| `flash-attn` 导入报 ABI 错 | wheel 与 torch 不匹配 | `pip install flash-attn==2.5.8 --no-build-isolation` |
+| VBench v1 的 `dynamic_degree` 跨运行抖动 | RAFT 在 GPU 上的非确定性 | 属预期；将该维容忍带放宽至 +/-0.025 |
+| `api_logs/` 膨胀到数 GB | 调用量大 | `scripts/clear_cache.py --api-logs --older-than 30d` |
+| 评测启动后立刻报 “no videos found” | layout 不匹配 | 对照第 11 节确认 layout；`videobench` 与 `t2vcompbench` 是按维度组织的 |
+
+分数不匹配时的深入排查路径见 TEST_MANUAL 第 5 节。
+
+---
+
+## 14. 许可证与引用
+
+工具集本身（本代码库）使用 **Apache-2.0** 许可证。各个被适配的上游各自持有自己的许可证，集中陈列于仓库根的 `LICENSES/`。
+
+重要上游许可证：
+
+| 上游 | 许可证 |
+|---|---|
+| VBench、VBench-2.0 | Apache-2.0 |
+| Video-Bench、WorldJen | 各论文自身许可证 |
+| T2V-CompBench（LLaVA-1.6-34B 子进程路径） | 仅限研究用途 |
+| DROID-SLAM、SEA-RAFT、GroundingDINO、SAM | 各自的开源许可证 |
+| WorldScore checkpoints | 在各骨干网络条款下的衍生使用 |
+
+### 引用工具集
+
+```bibtex
+@software{videogenevalkit2026,
+  title  = {videogenevalkit: A unified evaluation toolkit for text-to-video generation},
+  author = {Liu, Ning and contributors},
+  year   = {2026},
+  url    = {https://github.com/videogenevalkit/videogenevalkit}
+}
+```
+
+### 引用底层基准
+
+发表来自特定适配器的数字时，请**额外引用原始基准论文**，不要只引工具集。6 个锚定基准的 BibTeX 条目位于 `docs/citations.bib`。具体来说：
+
+- VBench v1：Huang 等，CVPR 2024
+- VBench-2.0：Zheng 等，CVPR 2025
+- Video-Bench：Han 等，CVPR 2025（arXiv:2504.04907）
+- WorldJen：WorldJen 团队，项目页 github.com/moonmath-ai
+- WorldScore：Duan 等
+- T2V-CompBench：Sun 等，ECCV 2024
+
+---
+
+> 用户手册到此结束。论文 Delta 验证结果见 [TEST_MANUAL.md](TEST_MANUAL.md)；工具集内部架构见 [DEV_MANUAL.md](DEV_MANUAL.md)。
