@@ -54,17 +54,9 @@ Plus 3 supplementary stubs landing (Physics-IQ, VBench++, V-ReasonBench).
 
 ## Quickstart
 
-The toolkit ships three install paths, ranked by recommendation:
+### 1. Clone + install env (~ 10 min)
 
-| Path | Time to working env | When to use |
-|---|---|---|
-| **A. Pre-packed env tarball** (recommended) | ~10 min, no dep resolution | end users — fastest reliable install |
-| **B. Docker image** | ~10 min once image is on a registry | users with NVIDIA Container Toolkit |
-| **C. conda env from yaml** (experimental) | ~30-60 min if it works | contributors building the env from source |
-
-### 1A. Install via pre-packed tarball (recommended)
-
-A conda-pack snapshot of the working env (Python 3.10 + torch 2.3.1+cu121 + ~350 pinned deps) is published at `videogenevalkit/env-tarball` on HuggingFace. Download, extract, run.
+The toolkit ships as a pre-packed env tarball — the same byte-for-byte environment that produced every result in `docs/TEST_MANUAL.md`.
 
 ```bash
 git clone https://github.com/videogenevalkit/videogenevalkit.git
@@ -73,49 +65,21 @@ cd videogenevalkit
 # Download the env tarball (~7.6 GB, ~5 min on a fast link)
 hf download videogenevalkit/env-tarball videvalkit-env.tar.gz --local-dir /tmp
 
-# Extract + activate
-mkdir -p /opt/videvalkit-env
-tar xzf /tmp/videvalkit-env.tar.gz -C /opt/videvalkit-env
+# Extract + activate (~15 GB on disk after unpack)
+sudo mkdir -p /opt/videvalkit-env
+sudo tar xzf /tmp/videvalkit-env.tar.gz -C /opt/videvalkit-env
+sudo chown -R $USER /opt/videvalkit-env
 source /opt/videvalkit-env/bin/activate
 conda-unpack            # rewrites absolute paths inside the env
 
-# Install the toolkit code (editable, against this clone)
+# Install the toolkit code + 7 build-from-source extras
 pip install --no-deps -e .
+bash scripts/post_install.sh    # detectron2, SAM-2, GroundingDINO, segment-anything, lietorch, droid_backends, en_core_web_sm
 
 videvalkit doctor       # verify
 ```
 
-After this, also run the build-from-source extras the tarball intentionally excludes (saves ~25 min during pack):
-
-```bash
-bash scripts/post_install.sh    # detectron2, SAM-2, GroundingDINO, segment-anything, lietorch, droid_backends, en_core_web_sm
-```
-
-### 1B. Install via Docker image
-
-```bash
-docker pull ghcr.io/videogenevalkit/videogenevalkit:0.1.0
-docker run --rm --gpus all \
-    -v ~/videvalkit-cache:/root/.cache/videvalkit \
-    -v $PWD:/workspace \
-    ghcr.io/videogenevalkit/videogenevalkit:0.1.0 \
-    list benchmarks
-```
-
-The image is built from the same `videogenevalkit/env-tarball` plus this repo's source. See [`docs/USER_MANUAL_en.md`](docs/USER_MANUAL_en.md) §3.2 for full run patterns.
-
-### 1C. Install via conda env yaml (experimental — slow, may fail)
-
-```bash
-git clone https://github.com/videogenevalkit/videogenevalkit.git
-cd videogenevalkit
-conda env create -f envs/videvalkit.yaml
-conda activate videvalkit
-pip install -e .
-bash scripts/post_install.sh
-```
-
-Known issues: the lock has ~350 transitive pins where the original env relied on `pip install --no-deps` overrides that the pip resolver cannot reconstruct from scratch (10+ conflict iterations during testing). Use path A or B instead unless you're contributing to the env stack.
+The tarball is a `conda-pack` snapshot of the validated working env — Python 3.10 + torch 2.3.1+cu121 + ~350 pinned dependencies (transformers 4.51.3, mmcv 2.2.0, xformers, triton, bitsandbytes, accelerate, peft, ms-swift, decord, opencv, pyiqa, openai-clip, timm, ...). No pip resolution at install time, so no failure modes.
 
 ### 2. Fetch smoke data + checkpoints from HF (~ 15 min, ~ 8 GB)
 

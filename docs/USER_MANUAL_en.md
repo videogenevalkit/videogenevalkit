@@ -72,22 +72,10 @@ CPU-only runs are possible for the 3 paired metrics (PSNR, SSIM) but not for the
 
 ## 3. Installation
 
-Three install paths, ranked by recommendation:
-
-| Path | Time | Reliability | When to use |
-|---|---|---|---|
-| **3.1 Pre-packed env tarball** | ~10 min | ✓✓✓ deterministic | end users — **recommended** |
-| **3.2 Docker image** | ~10 min + image pull | ✓✓✓ deterministic | users with Docker + NVIDIA Container Toolkit |
-| **3.3 conda env from yaml** | 30-60 min, may fail | experimental | contributors rebuilding the env stack |
-
-All three end with the same `videvalkit` CLI on PATH. Pick one.
-
-### 3.1 Install via pre-packed env tarball (recommended)
-
-The toolkit publishes a `conda-pack` snapshot of the working env at `videogenevalkit/env-tarball` on HuggingFace. The tarball is a self-contained Python 3.10 prefix with ~350 pinned packages already installed (torch 2.3.1+cu121, transformers 4.51.3, mmcv 2.2.0, decord, opencv, pyiqa, openai-clip, timm, xformers, triton, bitsandbytes, accelerate, peft, ms-swift, qwen-vl-utils, and the validated combinations of every transitive dep). No pip resolution at install time → no failure modes.
+The toolkit ships as a pre-packed env tarball — the same byte-for-byte environment that produced every result in `TEST_MANUAL.md`. Download, extract, run.
 
 ```bash
-# 1. Clone the repo (only for source + scripts; no install yet)
+# 1. Clone the repo (source code + scripts + docs)
 git clone https://github.com/videogenevalkit/videogenevalkit.git
 cd videogenevalkit
 
@@ -95,79 +83,32 @@ cd videogenevalkit
 hf download videogenevalkit/env-tarball videvalkit-env.tar.gz \
     --local-dir /tmp
 
-# 3. Extract somewhere persistent (size on disk after unpack: ~15 GB)
+# 3. Extract to a persistent location (~15 GB on disk after unpack)
 sudo mkdir -p /opt/videvalkit-env
 sudo tar xzf /tmp/videvalkit-env.tar.gz -C /opt/videvalkit-env
 sudo chown -R $USER /opt/videvalkit-env
 
-# 4. Activate + rewrite the env's internal absolute paths
+# 4. Activate the env and rewrite its internal absolute paths
 source /opt/videvalkit-env/bin/activate
 conda-unpack
 
-# 5. Install the toolkit source (editable against this clone)
+# 5. Install the toolkit source against this clone
 pip install --no-deps -e .
 
 # 6. Post-install: 7 build-from-source / git-only deps not in the tarball
 bash scripts/post_install.sh
 # Or, if you don't need WorldScore camera_control or VBench-2.0 Human_Anatomy:
-# bash scripts/post_install.sh --minimal   (~10 min saved)
-
-# 7. Verify
-videvalkit doctor
+# bash scripts/post_install.sh --minimal   (~10 min faster)
 ```
 
-Why the tarball is faster than `conda env create`: zero dependency resolution. The tarball is a byte-for-byte snapshot of an env that already worked end-to-end. Unpack + relocate + done.
+What's in the tarball:
+- Python 3.10 + torch 2.3.1+cu121
+- ~350 pinned dependencies (transformers 4.51.3, mmcv 2.2.0, decord, opencv, pyiqa, openai-clip, timm, xformers, triton, bitsandbytes, accelerate, peft, ms-swift, qwen-vl-utils, and the validated combinations of every transitive dep)
+- All checkpoints fetched at first benchmark run, not bundled (~125 GB if you want everything; per-bench fetch via `videvalkit fetch-checkpoints --bench <name>`)
 
-### 3.2 Install via Docker image
+What `scripts/post_install.sh` adds: `detectron2`, `SAM-2`, `GroundingDINO`, `segment-anything`, `lietorch`, `droid_backends` (built via DROID-SLAM clone), and the `en_core_web_sm` spaCy model. These are git/source-build packages excluded from the tarball to keep its size predictable; they're rebuilt against your local CUDA at post-install time.
 
-The Docker image is built from the same tarball plus this repo's source. Prerequisites: Docker + [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html) on the host.
-
-```bash
-# 1. Pull the image (one-time, ~15-25 GB)
-docker pull ghcr.io/videogenevalkit/videogenevalkit:0.1.0
-
-# 2. Verify GPU + CLI work inside the container
-docker run --rm --gpus all \
-    ghcr.io/videogenevalkit/videogenevalkit:0.1.0 \
-    list benchmarks
-
-# 3. Run an eval (mount your videos + a persistent cache dir for HF data)
-docker run --rm --gpus all \
-    -v ~/videvalkit-cache:/root/.cache/videvalkit \
-    -v $PWD:/workspace \
-    ghcr.io/videogenevalkit/videogenevalkit:0.1.0 \
-    eval --bench worldjen \
-         --videos /workspace/videos \
-         --workspace /workspace/runs/first \
-         --models Kling \
-         --judge gemma-4-31b-local
-```
-
-The image is **read-only at runtime** — mount host directories for any data the toolkit needs to write (workspaces, fetched smoke data, generated outputs). See §6 for per-bench mount patterns.
-
-### 3.3 Install via conda env yaml (experimental — may fail)
-
-This path tries to recreate the env from scratch via pip's resolver. **Known to be brittle**: testing showed 10+ failed iterations on transitive-dep conflicts because the original env relied on `pip install --no-deps` overrides that pip's standard resolver cannot reproduce. Use 3.1 or 3.2 unless you are actively contributing to the env stack.
-
-```bash
-git clone https://github.com/videogenevalkit/videogenevalkit.git
-cd videogenevalkit
-conda env create -f envs/videvalkit.yaml -p /tmp/videvalkit-env
-conda activate /tmp/videvalkit-env
-pip install -e .
-bash scripts/post_install.sh
-videvalkit doctor
-```
-
-Common failure points (from the iterations during testing):
-- `mmcv` fails to build from source: drop the pin and use the OpenMMLab prebuilt wheel index.
-- `aliyun-python-sdk-core`, `crcmod`, `droid_backends`: not on PyPI — already stripped from the lock and moved to `scripts/post_install.sh`.
-- `triton 3.7.0` vs `torch 2.3.1` dep conflict: drop the triton pin.
-- `pillow 12.2.0` conflicts with five other packages: drop or downgrade.
-
-If you hit a new conflict, the fastest fix is to switch to path 3.1.
-
-### 3.4 Verify your setup
+### 3.1 Verify your setup
 
 ```bash
 videvalkit doctor
