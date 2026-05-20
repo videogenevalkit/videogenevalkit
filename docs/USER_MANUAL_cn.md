@@ -182,6 +182,62 @@ videvalkit fetch-checkpoints --bench t2vcompbench --dry-run
 
 Checkpoint 默认落盘到 `~/.cache/videvalkit/checkpoints/<bench>/`。可用 `VIDEVALKIT_CHECKPOINT_ROOT` 覆盖。下载支持断点续传。
 
+### 4.4 `fetch-checkpoints` 拉取了什么，以及如何校验
+
+`videvalkit fetch-checkpoints --bench <name>` 会从 HF 上的 `videogenevalkit/checkpoints` 拉取该基准的*整个* checkpoint 子树 —— 是所有维度的权重，而不只是某一维。完整清单（2026-05-20 端到端验证：33 个文件全部下载完成，字节大小与 HF manifest 完全一致，且全部能正常反序列化）：
+
+| Bench | 文件 | 大小 | 支撑的维度 |
+|---|---|---:|---|
+| `vbench` | `pretrained/dino_model/dino_vitbase16_pretrain.pth` | 343 MB | `subject_consistency` |
+| | `pretrained/clip_model/ViT-B-32.pt` | 354 MB | `background_consistency` |
+| | `pretrained/clip_model/ViT-L-14.pt` | 933 MB | `aesthetic_quality`（LAION 预测器） |
+| | `pretrained/clip_model/RN50.pt` | 256 MB | CLIP 主干（共享） |
+| | `pretrained/amt_model/amt-s.pth` | 12 MB | `motion_smoothness` |
+| | `pretrained/grit_model/grit_b_densecap_objectdet.pth` | 417 MB | `object_class`、`color`、`multiple_objects`、`spatial_relationship` |
+| | `pretrained/pyiqa_model/musiq_spaq_ckpt-358bb6af.pth` | 109 MB | `imaging_quality` |
+| | `pretrained/umt_model/l16_ptk710_ftk710_ftk400_f16_res224.pth` | 607 MB | `human_action` |
+| | `pretrained/caption_model/tag2text_swin_14m.pth` | 4.5 GB | `scene` |
+| | `pretrained/viclip_model/ViClip-InternVid-10M-FLT.pth` | 1.7 GB | `appearance_style`、`temporal_style`、`overall_consistency` |
+| `vbench2` | `third_party/cotracker/cotracker2.pth` | 204 MB | `Camera_Motion`、`Multi-View_Consistency` |
+| | `third_party/arcface/resnet18_110.pth` | 103 MB | `Human_Identity` |
+| | `third_party/retinaface/retinaface_resnet50_2020-07-20.pth` | 110 MB | `Human_Identity`（人脸检测） |
+| | `third_party/Dense_match/scaled_offline.pth` + `scaled_online.pth` | 102 MB ×2 | `Multi-View_Consistency`（稠密匹配） |
+| `worldscore` | `Tartan-C-T-TSKH-spring540x960-M.pth` | 79 MB | SEA-RAFT —— `motion_magnitude`、`photometric_consistency` |
+| | `VFIMamba.pkl` | 264 MB | `motion_smoothness` |
+| | `raft-things.pth` | 21 MB | DROID-SLAM 内部使用的 RAFT |
+| | `droid.pth` | 16 MB | DROID-SLAM —— `camera_control`、`3d_consistency` |
+| | `groundingdino_swint_ogc.pth` | 694 MB | `object_control` |
+| | `sam_vit_h_4b8939.pth` | 2.6 GB | `object_control`（GD + SAM-H） |
+| | `sam2.1_hiera_large.pt` + `sam2.1_hiera_base_plus.pt` | 898 MB + 324 MB | `motion_accuracy`（掩膜传播） |
+| | `sac+logos+ava1-l14-linearMSE.pth` | 3.7 MB | `subjective_quality` |
+| `t2vcompbench` | `groundingdino_swint_ogc.pth` | 694 MB | `generative_numeracy`、`spatial_relationships`、`motion_binding` |
+| | `sam_vit_h_4b8939.pth` | 2.6 GB | `motion_binding` |
+| | `depth_anything_vitl14.pth` | 1.3 GB | `spatial_relationships`（3D） |
+| | `movi_f_cotracker2_patch_4_wind_8.pth` + `movi_f_raft_patch_4_alpha.pth` + `cvo_raft_patch_8.pth` | 204 + 23 + 21 MB | `motion_binding`（DOT 跟踪器） |
+
+`videobench` 与 `worldjen` 不拉取任何分基准 checkpoint —— 两者完全依赖 VLM/LLM judge endpoint 打分。`vbench2`（LLaVA-Video-7B、Qwen2.5-7B、Qwen2.5-VL-3B）与 `t2vcompbench`（LLaVA-1.6-34B）使用的 MLLM 权重位于独立的 `hf-models/` 分组下 —— 用 `--bench hf-models` 拉取。
+
+要自行校验一次拉取，把本地字节大小与 HF manifest 对比：
+
+```bash
+python - <<'PY'
+from huggingface_hub import HfApi
+import os
+root = os.path.expanduser("~/.cache/videvalkit/checkpoints")
+info = HfApi().repo_info("videogenevalkit/checkpoints", repo_type="dataset", files_metadata=True)
+bad = 0
+for s in info.siblings:
+    lp = os.path.join(root, s.rfilename)
+    if not os.path.exists(lp):
+        continue                       # 未拉取 —— 跳过
+    if s.size is not None and os.path.getsize(lp) != s.size:
+        print("SIZE MISMATCH:", s.rfilename); bad += 1
+print("所有已拉取文件大小一致" if not bad else f"{bad} 个不一致 —— 请重跑 fetch-checkpoints")
+PY
+```
+
+字节大小一致再加上一次成功的基准运行，即足以证明 checkpoint 完好 —— 每个适配器都在 scorer 初始化时加载其权重，文件被截断时会立即报错。
+
 ---
 
 ## 5. 第一次评测
@@ -257,6 +313,39 @@ cat runs/first/results/summary/worldjen/Kling.json
 运行间方差：CV 类维度（DINO、CoTracker3、SEA-RAFT、GroundingDINO）约 ±0.05；VLM judge 类维度（Gemma-4-31B、LLaVA-1.6-34B）约 ±0.15（temperature=0.2 采样所致）。各维容忍带详见 [`TEST_MANUAL.md`](TEST_MANUAL.md) §3。
 
 **跑超过 3 个视频。** 没有 `--limit` 参数 —— `videvalkit eval` 会对 `--videos` 目录下找到的*每一个*视频打分。下文各示例中的「3 个视频」上限完全来自暂存步骤里的 `| head -3` 过滤。要跑全集，可以去掉 `| head -3`（软链全部视频），或者直接把 `--videos` 指向源目录、跳过暂存步骤。注意 `fetch-smoke-data` 只拉取一个**子样本**（HF 数据集 `videogenevalkit/smoke-data` —— 例如 WorldJen 50 个视频、其余基准每维约 3 个）；去掉 `| head -3` 是跑完该*子样本*中的所有视频，而非完整的官方基准全集。要跑完整全集，需用你自己的模型在各基准的官方 prompt 列表上生成视频（`videvalkit fetch-upstream --bench <name>` 可拉取这些 prompt 清单）。
+
+### 维度名称与 `--dimensions` 参数
+
+`--dimensions` 接收**精确**的维度名 —— 要跑多个就重复该参数（`--dimensions a --dimensions b`）。请逐字使用下列名称：
+
+| Bench | 全部维度名（与 `--dimensions` 逐字一致） |
+|---|---|
+| `vbench`（16） | `subject_consistency` · `background_consistency` · `temporal_flickering` · `motion_smoothness` · `dynamic_degree` · `aesthetic_quality` · `imaging_quality` · `object_class` · `multiple_objects` · `human_action` · `color` · `spatial_relationship` · `scene` · `temporal_style` · `appearance_style` · `overall_consistency` |
+| `vbench2`（18） | `Human_Anatomy` · `Human_Identity` · `Human_Clothes` · `Diversity` · `Composition` · `Dynamic_Spatial_Relationship` · `Dynamic_Attribute` · `Motion_Order_Understanding` · `Human_Interaction` · `Complex_Landscape` · `Complex_Plot` · `Camera_Motion` · `Motion_Rationality` · `Instance_Preservation` · `Mechanics` · `Thermotics` · `Material` · `Multi-View_Consistency`（注意：首字母大写、下划线、一个连字符） |
+| `videobench`（9） | `imaging_quality` · `aesthetic_quality` · `temporal_consistency` · `motion_effects` · `video_text_consistency` · `object_class_consistency` · `color_consistency` · `action_consistency` · `scene_consistency` |
+| `worldjen`（16） | `subject_consistency` · `scene_consistency` · `motion_smoothness` · `temporal_flickering` · `inertial_consistency` · `physical_mechanics` · `object_permanence` · `human_fidelity` · `dynamic_degree` · `semantic_adherence` · `spatial_relationship` · `semantic_drift` · `composition_framing` · `lighting_volumetric` · `color_harmony` · `structural_gestalt` |
+| `worldscore`（10） | `camera_control` · `object_control` · `content_alignment` · `3d_consistency` · `photometric_consistency` · `style_consistency` · `subjective_quality` · `motion_accuracy` · `motion_magnitude` · `motion_smoothness` |
+| `t2vcompbench`（7） | `consistent_attribute` · `dynamic_attribute` · `action_binding` · `object_interactions` · `spatial_relationships` · `generative_numeracy` · `motion_binding` |
+
+**没有 `all` 关键字。** 要跑全部维度，请**完全省略 `--dimensions`** —— 这就是「all」的行为。传 `--dimensions all` 会被当成一个名为 `all` 的维度，匹配不到任何东西（`worldscore` 与 `t2vcompbench` 会直接报错 `unknown dimension 'all'`，其余基准则静默地一个维度都不跑）。即：
+
+```bash
+videvalkit eval --bench vbench --videos ... --workspace ...                    # 全部 16 维
+videvalkit eval --bench vbench --videos ... --workspace ... --dimensions color # 单维
+videvalkit eval --bench vbench ... --dimensions color --dimensions scene       # 两维
+```
+
+### 评测后的输出文件
+
+一次运行会在 `<workspace>/results/` 下写入三类文件：
+
+| 文件 | 路径 | 内容 |
+|---|---|---|
+| **Raw**（逐视频） | `results/raw/<bench>/<model>/<dimension>/<prompt_id>.json` | 每个 (model, dimension, prompt) 一个 JSON —— 评分器原始输出、judge 对话记录、评分器名。这是断点续跑的最小单元。 |
+| **Summary**（逐模型） | `results/summary/<bench>/<model>.json` | 聚合后的逐维分数 + 该模型的基准头条分。**看结果就看这个文件。** |
+| **Leaderboard 导出** | `results/leaderboard/cross_benchmark.json` | 跨所有模型/基准的扁平表，由 `videvalkit aggregate` 生成。 |
+
+所以 `videvalkit eval --bench vbench --models HunyuanVideo ...` 之后，分数落在 `<workspace>/results/summary/vbench/HunyuanVideo.json`。`eval` 命令同时会把 summary 字典以 JSON 形式打印到 stdout。
 
 各维定义与设计源材料：DEV_MANUAL 第 15.3.1 节（逐维依赖）与 TEST_MANUAL 第 4 节（验证结果）。
 

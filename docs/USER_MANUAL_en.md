@@ -180,6 +180,62 @@ Note: `LLaVA-1.6-34B` is bundled but optional. If you have less than 80 GB of GP
 
 Checkpoints land under `~/.cache/videvalkit/checkpoints/<bench>/` by default. You can override with `VIDEVALKIT_CHECKPOINT_ROOT`. Downloads are resumable.
 
+### 4.4 What `fetch-checkpoints` pulls, and how to verify it
+
+`videvalkit fetch-checkpoints --bench <name>` pulls the *entire* per-bench checkpoint subtree from `videogenevalkit/checkpoints` on HF — every dimension's weights, not just one. The full manifest (validated end-to-end on 2026-05-20: all 33 files download with byte-sizes matching the HF manifest and all deserialize cleanly):
+
+| Bench | File | Size | Backs dimension(s) |
+|---|---|---:|---|
+| `vbench` | `pretrained/dino_model/dino_vitbase16_pretrain.pth` | 343 MB | `subject_consistency` |
+| | `pretrained/clip_model/ViT-B-32.pt` | 354 MB | `background_consistency` |
+| | `pretrained/clip_model/ViT-L-14.pt` | 933 MB | `aesthetic_quality` (LAION predictor) |
+| | `pretrained/clip_model/RN50.pt` | 256 MB | CLIP backbone (shared) |
+| | `pretrained/amt_model/amt-s.pth` | 12 MB | `motion_smoothness` |
+| | `pretrained/grit_model/grit_b_densecap_objectdet.pth` | 417 MB | `object_class`, `color`, `multiple_objects`, `spatial_relationship` |
+| | `pretrained/pyiqa_model/musiq_spaq_ckpt-358bb6af.pth` | 109 MB | `imaging_quality` |
+| | `pretrained/umt_model/l16_ptk710_ftk710_ftk400_f16_res224.pth` | 607 MB | `human_action` |
+| | `pretrained/caption_model/tag2text_swin_14m.pth` | 4.5 GB | `scene` |
+| | `pretrained/viclip_model/ViClip-InternVid-10M-FLT.pth` | 1.7 GB | `appearance_style`, `temporal_style`, `overall_consistency` |
+| `vbench2` | `third_party/cotracker/cotracker2.pth` | 204 MB | `Camera_Motion`, `Multi-View_Consistency` |
+| | `third_party/arcface/resnet18_110.pth` | 103 MB | `Human_Identity` |
+| | `third_party/retinaface/retinaface_resnet50_2020-07-20.pth` | 110 MB | `Human_Identity` (face detect) |
+| | `third_party/Dense_match/scaled_offline.pth` + `scaled_online.pth` | 102 MB ×2 | `Multi-View_Consistency` (dense match) |
+| `worldscore` | `Tartan-C-T-TSKH-spring540x960-M.pth` | 79 MB | SEA-RAFT — `motion_magnitude`, `photometric_consistency` |
+| | `VFIMamba.pkl` | 264 MB | `motion_smoothness` |
+| | `raft-things.pth` | 21 MB | RAFT used inside DROID-SLAM |
+| | `droid.pth` | 16 MB | DROID-SLAM — `camera_control`, `3d_consistency` |
+| | `groundingdino_swint_ogc.pth` | 694 MB | `object_control` |
+| | `sam_vit_h_4b8939.pth` | 2.6 GB | `object_control` (GD + SAM-H) |
+| | `sam2.1_hiera_large.pt` + `sam2.1_hiera_base_plus.pt` | 898 MB + 324 MB | `motion_accuracy` (mask propagation) |
+| | `sac+logos+ava1-l14-linearMSE.pth` | 3.7 MB | `subjective_quality` |
+| `t2vcompbench` | `groundingdino_swint_ogc.pth` | 694 MB | `generative_numeracy`, `spatial_relationships`, `motion_binding` |
+| | `sam_vit_h_4b8939.pth` | 2.6 GB | `motion_binding` |
+| | `depth_anything_vitl14.pth` | 1.3 GB | `spatial_relationships` (3D) |
+| | `movi_f_cotracker2_patch_4_wind_8.pth` + `movi_f_raft_patch_4_alpha.pth` + `cvo_raft_patch_8.pth` | 204 + 23 + 21 MB | `motion_binding` (DOT tracker) |
+
+`videobench` and `worldjen` pull no per-bench checkpoints — both score purely through a VLM/LLM judge endpoint. The MLLM weights used by `vbench2` (LLaVA-Video-7B, Qwen2.5-7B, Qwen2.5-VL-3B) and `t2vcompbench` (LLaVA-1.6-34B) live under the separate `hf-models/` group — fetch with `--bench hf-models`.
+
+To verify a fetch yourself, compare local byte-sizes against the HF manifest:
+
+```bash
+python - <<'PY'
+from huggingface_hub import HfApi
+import os
+root = os.path.expanduser("~/.cache/videvalkit/checkpoints")
+info = HfApi().repo_info("videogenevalkit/checkpoints", repo_type="dataset", files_metadata=True)
+bad = 0
+for s in info.siblings:
+    lp = os.path.join(root, s.rfilename)
+    if not os.path.exists(lp):
+        continue                       # not fetched — skip
+    if s.size is not None and os.path.getsize(lp) != s.size:
+        print("SIZE MISMATCH:", s.rfilename); bad += 1
+print("all fetched files match" if not bad else f"{bad} mismatched — re-run fetch-checkpoints")
+PY
+```
+
+A size match plus a successful first benchmark run is sufficient proof the checkpoint is intact — every adapter loads its weights at scorer-init and will raise immediately on a truncated file.
+
 ---
 
 ## 5. Your first evaluation
@@ -255,6 +311,39 @@ Each subsection below is a complete copy-pasteable running example: fetch the sm
 Run-to-run variance: ±0.05 on CV-based dims (DINO, CoTracker3, SEA-RAFT, GroundingDINO), ±0.15 on VLM-judge dims (Gemma-4-31B, LLaVA-1.6-34B). Tolerance bands per dim in [`TEST_MANUAL.md`](TEST_MANUAL.md) §3.
 
 **Running on more than 3 videos.** There is no `--limit` flag — `videvalkit eval` scores *every* video found under `--videos`. The 3-video cap in each recipe below comes solely from the `| head -3` filter in the staging step. To run the full set, either drop `| head -3` so all videos are symlinked, or point `--videos` straight at the source directory and skip staging entirely. Note that `fetch-smoke-data` only pulls a **subsample** (the `videogenevalkit/smoke-data` HF dataset — e.g. 50 WorldJen videos, ~3 per dim for the others); removing `| head -3` runs every video *in that subsample*, not the full official benchmark corpus. For the complete corpus you must generate videos with your own model over each benchmark's official prompt list (`videvalkit fetch-upstream --bench <name>` pulls those prompt manifests).
+
+### Dimension names and the `--dimensions` flag
+
+`--dimensions` takes the **exact** dimension name(s) — repeat the flag for several (`--dimensions a --dimensions b`). Use these names verbatim:
+
+| Bench | All dimension names (use verbatim with `--dimensions`) |
+|---|---|
+| `vbench` (16) | `subject_consistency` · `background_consistency` · `temporal_flickering` · `motion_smoothness` · `dynamic_degree` · `aesthetic_quality` · `imaging_quality` · `object_class` · `multiple_objects` · `human_action` · `color` · `spatial_relationship` · `scene` · `temporal_style` · `appearance_style` · `overall_consistency` |
+| `vbench2` (18) | `Human_Anatomy` · `Human_Identity` · `Human_Clothes` · `Diversity` · `Composition` · `Dynamic_Spatial_Relationship` · `Dynamic_Attribute` · `Motion_Order_Understanding` · `Human_Interaction` · `Complex_Landscape` · `Complex_Plot` · `Camera_Motion` · `Motion_Rationality` · `Instance_Preservation` · `Mechanics` · `Thermotics` · `Material` · `Multi-View_Consistency` (note: capitalized, underscores, one hyphen) |
+| `videobench` (9) | `imaging_quality` · `aesthetic_quality` · `temporal_consistency` · `motion_effects` · `video_text_consistency` · `object_class_consistency` · `color_consistency` · `action_consistency` · `scene_consistency` |
+| `worldjen` (16) | `subject_consistency` · `scene_consistency` · `motion_smoothness` · `temporal_flickering` · `inertial_consistency` · `physical_mechanics` · `object_permanence` · `human_fidelity` · `dynamic_degree` · `semantic_adherence` · `spatial_relationship` · `semantic_drift` · `composition_framing` · `lighting_volumetric` · `color_harmony` · `structural_gestalt` |
+| `worldscore` (10) | `camera_control` · `object_control` · `content_alignment` · `3d_consistency` · `photometric_consistency` · `style_consistency` · `subjective_quality` · `motion_accuracy` · `motion_magnitude` · `motion_smoothness` |
+| `t2vcompbench` (7) | `consistent_attribute` · `dynamic_attribute` · `action_binding` · `object_interactions` · `spatial_relationships` · `generative_numeracy` · `motion_binding` |
+
+**There is no `all` keyword.** To run every dimension, **omit `--dimensions` entirely** — that is the "all" behavior. Passing `--dimensions all` is treated as a dimension literally named `all`, which matches nothing (`worldscore` and `t2vcompbench` will hard-error with `unknown dimension 'all'`; the others silently score zero dimensions). So:
+
+```bash
+videvalkit eval --bench vbench --videos ... --workspace ...                    # all 16 dims
+videvalkit eval --bench vbench --videos ... --workspace ... --dimensions color # one dim
+videvalkit eval --bench vbench ... --dimensions color --dimensions scene       # two dims
+```
+
+### Output files after an evaluation
+
+A run writes three kinds of file under `<workspace>/results/`:
+
+| File | Path | Content |
+|---|---|---|
+| **Raw** (per video) | `results/raw/<bench>/<model>/<dimension>/<prompt_id>.json` | One JSON per (model, dimension, prompt) — the scorer's raw output, judge transcript, scorer name. This is the resume unit. |
+| **Summary** (per model) | `results/summary/<bench>/<model>.json` | Aggregated per-dimension scores + the benchmark headline for that model. **This is the file you read for results.** |
+| **Leaderboard export** | `results/leaderboard/cross_benchmark.json` | Flattened table across all models/benchmarks, produced by `videvalkit aggregate`. |
+
+So after `videvalkit eval --bench vbench --models HunyuanVideo ...` the scores land in `<workspace>/results/summary/vbench/HunyuanVideo.json`. The `eval` command also echoes the summary dict to stdout as JSON.
 
 Source material for the dim definitions and per-bench design: DEV_MANUAL section 15.3.1 (per-dim deps) and TEST_MANUAL section 4 (validation results).
 

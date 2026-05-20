@@ -6,7 +6,7 @@
 | Version | v0.3 |
 | Status | Working spec |
 | Last revised | 2026-05-14 (per-dim restructure: each Benchmark dimension now carries example prompt, what is evaluated, method, pretrained checkpoint, and expected result) |
-| Companion docs | [DEV_MANUAL.md](DEV_MANUAL.md) (architecture · pipeline verification framework) · [USER_MANUAL.md](USER_MANUAL.md) (how to run) · [STATUS.md](STATUS.md) (current test results vs the leaderboard) |
+| Companion docs | [DEV_MANUAL.md](DEV_MANUAL.md) (architecture · pipeline verification framework) · [USER_MANUAL.md](USER_MANUAL.md) (how to run) |
 | Audience | Researchers reading "what does this number measure?" · Release engineers verifying paper reproduction · Adapter authors wiring a new Benchmark |
 
 This manual answers four questions, per Benchmark:
@@ -16,7 +16,7 @@ This manual answers four questions, per Benchmark:
 3. **Which algorithm and pretrained checkpoint** scores each dimension?
 4. **What does an expected/passing result look like** on each dimension?
 
-For *how to run* an evaluation, see [USER_MANUAL](USER_MANUAL.md). For *current results from our internal models*, see [STATUS](STATUS.md). For *architectural decisions and the pipeline-verification framework*, see [DEV_MANUAL](DEV_MANUAL.md).
+For *how to run* an evaluation, see [USER_MANUAL](USER_MANUAL.md). For *architectural decisions and the pipeline-verification framework*, see [DEV_MANUAL](DEV_MANUAL.md).
 
 ---
 
@@ -255,7 +255,7 @@ Tolerances are absolute deviation on the normalized [0, 1] score range unless no
 | Reproduces | Table 2 + live leaderboard |
 | Upstream package | `vbench` (PyPI) |
 | Adapter | `src/videvalkit/benchmarks/vbench/` |
-| Implementation status | ✅ end-to-end · 10 / 16 dims producing scores today (see [STATUS](STATUS.md#vbench-v1-10--16-dims-scoring)) |
+| Implementation status | ✅ end-to-end · 10 / 16 dims producing scores today |
 
 **Dataset**
 
@@ -1222,4 +1222,4 @@ The `validation/expected/*.json` files are the source of truth for paper numbers
 
 ---
 
-> End of test manual. Pairs with [DEV_MANUAL.md](DEV_MANUAL.md) (architecture), [USER_MANUAL.md](USER_MANUAL.md) (how to run), [STATUS.md](STATUS.md) (current per-dim results).
+> End of test manual. Pairs with [DEV_MANUAL.md](DEV_MANUAL.md) (architecture), [USER_MANUAL.md](USER_MANUAL.md) (how to run).

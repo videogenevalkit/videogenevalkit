@@ -1269,7 +1269,7 @@ The weight tarball is large (~ 200 GB full); we recommend splitting into "minimu
 |---|---|
 | Install the toolkit, run a benchmark, customize inputs | [USER_MANUAL.md](USER_MANUAL.md) |
 | Know what each metric measures and which paper it reproduces | [TEST_MANUAL.md](TEST_MANUAL.md) |
-| Know what scores we got and how they align with the leaderboard | [STATUS.md](STATUS.md) |
+| Know what scores we got and how they align with the leaderboard | [TEST_MANUAL.md](TEST_MANUAL.md) |
 | Understand the architecture, module boundaries, design tradeoffs | this document (§1–§8) |
 | Verify a release candidate before tagging | [§9b](#9b-pipeline-verification-framework) below |
 
@@ -1289,7 +1289,7 @@ The workflow below runs **7 structural checks** before any score-comparison verd
 | 6. Judge configuration | Is the judge model, snapshot, and rubric identical to the paper's? | `gpt-4o-2024-05-13` was deprecated; calls now land on `gpt-4o-2024-11-20` which is softer by 2 %. |
 | 7. Score equivalence | Are the numbers in tolerance? | The bands in TEST_MANUAL §3 do their job. |
 
-> **Implementation status (2026-05-14):** the toolkit-side scripts that automate stages 1–7 (`scripts/validation/compare.py`, `verify_prompts.py`, `checksum_videos.py`, `build_manifest.py`, and per-Benchmark `tests/integration/test_adapter_<bench>.py`) are not yet authored. The 7 stages below describe the target framework. Today, the closest thing is `pytest tests/` (which covers stages 1–3 at the registration level) and ad-hoc Python in `STATUS.md`.
+> **Implementation status (2026-05-14):** the toolkit-side scripts that automate stages 1–7 (`scripts/validation/compare.py`, `verify_prompts.py`, `checksum_videos.py`, `build_manifest.py`, and per-Benchmark `tests/integration/test_adapter_<bench>.py`) are not yet authored. The 7 stages below describe the target framework. Today, the closest thing is `pytest tests/` (which covers stages 1–3 at the registration level).
 
 #### Stage 1 — Adapter integrity
 
