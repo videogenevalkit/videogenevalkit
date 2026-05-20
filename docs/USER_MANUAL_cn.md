@@ -149,18 +149,22 @@ videvalkit fetch-smoke-data
 videvalkit fetch-smoke-data --bench worldjen
 ```
 
-smoke 数据默认落盘到 `~/.cache/videvalkit/smoke-data/<bench>/`。smoke 集是一个精选子集 —— 足以端到端验证整条流水线、无需多日 GPU 任务，但它**并不**包含每个维度的视频。`videogenevalkit/smoke-data` 数据集的实际内容明细：
+smoke 数据默认落盘到 `~/.cache/videvalkit/smoke-data/<bench>/`。smoke 集是一个精选子集 —— 足以端到端验证整条流水线、无需多日 GPU 任务，但它**并不**包含每个维度的视频。下面按维度列出 `videogenevalkit/smoke-data` 数据集的内容明细，并注明一组视频是被多个维度**共用**还是某个维度**专属**：
 
-| Bench | 数据集中的视频数 | 维度覆盖 |
-|---|---:|---|
-| `vbench` | 360 mp4（72 prompt × 5 采样），扁平布局 | **16 维中的 3 维** —— 每个视频可用于 `subject_consistency`、`dynamic_degree`、`motion_smoothness`；其余 13 维需要 smoke 集中不存在的维度专属 prompt |
-| `vbench2` | 324 mp4（108 prompt × 3 采样），全部在 `Camera_Motion/` 下 | **18 维中的 1 维** —— 仅 `Camera_Motion` |
-| `videobench` | 78 mp4，在 `action_consistency/` 下 | **9 维中的 1 维** —— 仅 `action_consistency` |
-| `worldjen` | 50 mp4，扁平布局 | **全部 16 维** —— PHAS 流水线对每个视频在每个维度上打分（不按维度切分） |
-| `worldscore` | 100 个 dynamic + 103 个 static mp4 + 96 个参考帧 | **全部 10 维** —— 100 个 dynamic 视频用于 3 个动态维，103 个 static 视频 + 参考帧用于 7 个静态维 |
-| `t2vcompbench` | 1400 mp4（每维 200 个） | **全部 7 维** —— `consistent_attribute`、`dynamic_attribute`、`action_binding`、`object_interactions`、`spatial_relationships`、`generative_numeracy`、`motion_binding` |
+| Bench | 维度 | 视频数 | 共用 / 专属 |
+|---|---|---:|---|
+| `vbench` | `subject_consistency`、`dynamic_degree`、`motion_smoothness` | 360 | **共用** —— 这 3 维都对同一批 360 mp4 打分（72 prompt × 5 采样） |
+| `vbench` | 其余 13 维（`object_class`、`color`、`scene`、`human_action` 等） | 0 | smoke 集中没有 —— 需要维度专属 prompt |
+| `vbench2` | `Camera_Motion` | 324 | **专属** —— 108 prompt × 3 采样 |
+| `vbench2` | 其余 17 维 | 0 | smoke 集中没有 |
+| `videobench` | `action_consistency` | 78 | **专属** |
+| `videobench` | 其余 8 维 | 0 | smoke 集中没有 |
+| `worldjen` | 全部 16 维 | 50 | **共用** —— 这 50 个 mp4 每一个都在全部 16 维上打分（PHAS 不按维度切分） |
+| `worldscore` | 3 个动态维：`motion_accuracy`、`motion_magnitude`、`motion_smoothness` | 100 | **共用** —— 3 个动态维共用 |
+| `worldscore` | 7 个静态维：`camera_control`、`object_control`、`content_alignment`、`3d_consistency`、`photometric_consistency`、`style_consistency`、`subjective_quality` | 103（+ 96 个参考帧） | **共用** —— 7 个静态维共用 |
+| `t2vcompbench` | 7 维各自（`consistent_attribute`、`dynamic_attribute`、`action_binding`、`object_interactions`、`spatial_relationships`、`generative_numeracy`、`motion_binding`） | **每维 200**（共 1400） | **专属** —— 每个维度各有自己的 200 个 mp4 |
 
-对于 smoke 集只覆盖部分维度的基准（`vbench`、`vbench2`、`videobench`），未覆盖的维度仍可通过 checkpoint 下载 + load-check 验证（见第 4.4 节）；要对这些维度做完整的端到端运行，则需要用各维度的官方 prompt 列表生成视频（见第 11 节）。
+理解方式：`vbench`、`worldjen`、`worldscore` 用一批视频供多个维度复用（这些维度任意一个都能从共用集打分）；`t2vcompbench` 给每个维度各自 200 个视频；`vbench2` 与 `videobench` 各自只附带一个维度的视频。对于 smoke 集只覆盖部分维度的基准（`vbench`、`vbench2`、`videobench`），未覆盖的维度仍可通过 checkpoint 下载 + load-check 验证（见第 4.4 节）；要对这些维度做完整的端到端运行，则需要用各维度的官方 prompt 列表生成视频（见第 11 节）。
 
 ### 4.3 拉取 checkpoints
 
@@ -938,6 +942,71 @@ videvalkit metric \
 **实际影响：** 对 `vbench`、`vbench2`、`t2vcompbench`，你不能跨维度复用同一份 prompt 文件。要评测哪个维度，就用该维度的**官方逐维 prompt 列表**来生成视频。`videvalkit fetch-upstream --bench <name>` 会克隆上游仓库，其 `prompts/` 目录即存放这些逐维列表。
 
 resume（断点续算）是默认行为：重跑相同命令会跳过已有 `results/raw/*.json` 的 `(model, dim, prompt)` 三元组。如需强制重跑，请删除对应 JSON。
+
+### 11.2 端到端：评测你本地生成的视频
+
+这是「我有一个文件夹的模型生成视频 —— 用这些指标给它们打分」的完整流程。下面以一个 20 条视频集、在 VBench v1 上打分为例。
+
+**第 1 步 —— 决定要测什么。** 两种情况：
+
+- *复现排行榜* —— 你用某基准的**官方 prompt 列表**逐条生成视频（每 prompt 一条）。头条分可与公开排行榜对比。
+- *仅打分（自定义语料）* —— 你用**自己的 prompt** 生成视频。逐维分数仍然有效，但头条分是*部分复现*，不可与排行榜对比。大多数「评测我自己的模型」属于这种。
+
+然后选定基准 + 维度。CV／质量维（不需要 judge）是最省成本的起点；第 6 节列出了哪些维需要 judge。
+
+**第 2 步 —— 拉取所选维度的 checkpoint**（见第 4.3–4.4 节）：
+
+```bash
+videvalkit fetch-checkpoints --bench vbench
+```
+
+**第 3 步 —— 按第 11 节的逐基准 layout 摆放视频。** VBench v1 是 `<model>/` 下的扁平结构：
+
+```
+~/myeval/videos/
+  MyModel/
+    clip_0001-0.mp4
+    clip_0002-0.mp4
+    ...
+```
+
+文件名中 `-<sample_idx>` 之前的主干必须等于 prompt 文件里的 `prompt_id`。每 prompt 一条视频时用 `-0`。
+
+**第 4 步 —— 写 prompt 文件。** 每条视频一行 JSONL，按第 11.1 节中你所用基准的 schema。VBench v1 的最小 schema 为：
+
+```jsonl
+{"prompt_id": "clip_0001", "text": "a red fox trotting through snow", "prompt": "a red fox trotting through snow", "dimensions": ["subject_consistency", "motion_smoothness", "imaging_quality", "aesthetic_quality"]}
+{"prompt_id": "clip_0002", "text": "a city street at night with neon signs", "prompt": "a city street at night with neon signs", "dimensions": ["subject_consistency", "motion_smoothness", "imaging_quality", "aesthetic_quality"]}
+```
+
+对于依赖 prompt 的维度（`object_class`、`color`、`human_action`、`scene` 等），还需要 `auxiliary_info` 标签 —— 用自动标注器（第 12 节）生成。
+
+**第 5 步 —— 若基准需要 judge 则先启动。** VBench v1 与 WorldScore 不需要。VBench-2.0、Video-Bench、WorldJen、T2V-CompBench 需要 —— 启动本地 vLLM（第 7 节）或导出 API key，然后传 `--judge`。
+
+**第 6 步 —— 运行评测：**
+
+```bash
+videvalkit eval --bench vbench \
+    --videos ~/myeval/videos \
+    --workspace ~/myeval/ws \
+    --models MyModel \
+    --dimensions subject_consistency --dimensions motion_smoothness \
+    --dimensions imaging_quality --dimensions aesthetic_quality \
+    --prompts-file ~/myeval/prompts.jsonl
+```
+
+省略 `--dimensions` 即跑该基准支持的全部维度。resume 自动生效 —— 重跑会跳过已打分的 `(model, dim, prompt)` 三元组。
+
+**第 7 步 —— 看分数。** 逐模型 summary 写到 `~/myeval/ws/results/summary/vbench/MyModel.json`（逐维分数 + 基准头条分）；`eval` 命令也会把它打印到 stdout。完整布局见第 6 节「评测后的输出文件」。
+
+**第 8 步（可选）—— 对比多个模型。** 对每个模型重复第 3–6 步、写入**同一个** workspace，然后：
+
+```bash
+videvalkit aggregate --workspace ~/myeval/ws
+# → ~/myeval/ws/results/leaderboard/cross_benchmark.json
+```
+
+> 提醒：若你评测的是自定义 prompt 语料或只跑了部分维度，请把头条分标注为*部分复现* —— 它不可与公开排行榜对比。
 
 ---
 

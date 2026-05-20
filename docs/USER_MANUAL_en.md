@@ -147,18 +147,22 @@ videvalkit fetch-smoke-data
 videvalkit fetch-smoke-data --bench worldjen
 ```
 
-By default, smoke data lands under `~/.cache/videvalkit/smoke-data/<bench>/`. The smoke set is a curated subset — enough to verify the pipeline end-to-end without a multi-day GPU job, but it does **not** contain videos for every dimension. Breakdown of what the `videogenevalkit/smoke-data` dataset actually contains:
+By default, smoke data lands under `~/.cache/videvalkit/smoke-data/<bench>/`. The smoke set is a curated subset — enough to verify the pipeline end-to-end without a multi-day GPU job, but it does **not** contain videos for every dimension. Per-dimension breakdown of what the `videogenevalkit/smoke-data` dataset contains — note whether a video set is **shared** by several dimensions or **dedicated** to one:
 
-| Bench | Videos in dataset | Dimension coverage |
-|---|---:|---|
-| `vbench` | 360 mp4 (72 prompts × 5 samples), flat layout | **3 of 16** dims — every video is scorable on `subject_consistency`, `dynamic_degree`, `motion_smoothness`; the other 13 dims need dimension-specific prompts not present in the smoke set |
-| `vbench2` | 324 mp4 (108 prompts × 3 samples), all under `Camera_Motion/` | **1 of 18** dims — `Camera_Motion` only |
-| `videobench` | 78 mp4, under `action_consistency/` | **1 of 9** dims — `action_consistency` only |
-| `worldjen` | 50 mp4, flat layout | **all 16** dims — the PHAS pipeline scores every video on every dimension (no per-dim split) |
-| `worldscore` | 100 dynamic + 103 static mp4 + 96 reference frames | **all 10** dims — 100 dynamic videos for the 3 dynamic dims; 103 static videos + reference frames for the 7 static dims |
-| `t2vcompbench` | 1400 mp4 (200 per dimension) | **all 7** dims — `consistent_attribute`, `dynamic_attribute`, `action_binding`, `object_interactions`, `spatial_relationships`, `generative_numeracy`, `motion_binding` |
+| Bench | Dimension(s) | Videos | Shared or dedicated |
+|---|---|---:|---|
+| `vbench` | `subject_consistency`, `dynamic_degree`, `motion_smoothness` | 360 | **shared** — all 3 dims score the same 360 mp4 (72 prompts × 5 samples) |
+| `vbench` | other 13 dims (`object_class`, `color`, `scene`, `human_action`, …) | 0 | not in smoke set — need dimension-specific prompts |
+| `vbench2` | `Camera_Motion` | 324 | **dedicated** — 108 prompts × 3 samples |
+| `vbench2` | other 17 dims | 0 | not in smoke set |
+| `videobench` | `action_consistency` | 78 | **dedicated** |
+| `videobench` | other 8 dims | 0 | not in smoke set |
+| `worldjen` | all 16 dims | 50 | **shared** — every one of the 50 mp4 is scored on all 16 dims (PHAS has no per-dim split) |
+| `worldscore` | 3 dynamic dims: `motion_accuracy`, `motion_magnitude`, `motion_smoothness` | 100 | **shared** across the 3 dynamic dims |
+| `worldscore` | 7 static dims: `camera_control`, `object_control`, `content_alignment`, `3d_consistency`, `photometric_consistency`, `style_consistency`, `subjective_quality` | 103 (+ 96 reference frames) | **shared** across the 7 static dims |
+| `t2vcompbench` | each of the 7 dims (`consistent_attribute`, `dynamic_attribute`, `action_binding`, `object_interactions`, `spatial_relationships`, `generative_numeracy`, `motion_binding`) | 200 **per dim** (1400 total) | **dedicated** — each dimension has its own 200 mp4 |
 
-For a benchmark whose smoke set covers only a subset of dimensions (`vbench`, `vbench2`, `videobench`), the uncovered dimensions can still be validated by checkpoint download + load-check (section 4.4); a full end-to-end run of those dimensions needs videos generated from their official per-dimension prompt lists (see section 11).
+Reading this: `vbench`, `worldjen`, and `worldscore` reuse one video set across many dimensions (any of those dims is scorable from the shared set); `t2vcompbench` gives each dimension its own 200 videos; `vbench2` and `videobench` ship videos for only one dimension each. For a benchmark whose smoke set covers only a subset of dimensions (`vbench`, `vbench2`, `videobench`), the uncovered dimensions can still be validated by checkpoint download + load-check (section 4.4); a full end-to-end run of those dimensions needs videos generated from their official per-dimension prompt lists (see section 11).
 
 ### 4.3 Fetch checkpoints
 
@@ -936,6 +940,71 @@ A benchmark's prompt file is **not** one generic caption list. For most benchmar
 **Practical consequence:** you cannot reuse one prompt file across dimensions for `vbench`, `vbench2`, or `t2vcompbench`. Generate your videos against the **official per-dimension prompt list** for each dimension you intend to score. `videvalkit fetch-upstream --bench <name>` clones the upstream repo whose `prompts/` directory holds these per-dimension lists.
 
 Resume is automatic: re-running the same command skips `(model, dim, prompt)` triples whose `results/raw/*.json` already exists. To force a re-run, delete the JSONs.
+
+### 11.2 End-to-end: evaluating your own locally-generated videos
+
+This is the full workflow for "I have a folder of videos my model generated — score them with the metrics." Worked example below: a 20-video set scored on VBench v1.
+
+**Step 1 — decide what to measure.** Two cases:
+
+- *Leaderboard reproduction* — you generated one video per prompt from a benchmark's **official prompt list**. The headline is comparable to the public leaderboard.
+- *Score-only (custom corpus)* — you generated from your **own prompts**. You still get valid per-dimension scores, but the headline is a *partial reproduction*, not leaderboard-comparable. Most "evaluate my own model" cases are this.
+
+Then pick the benchmark + dimensions. CV/quality dims (no judge) are the cheapest starting point; §6 lists which dims need a judge.
+
+**Step 2 — fetch the checkpoints** for the dimensions you picked (see §4.3–§4.4):
+
+```bash
+videvalkit fetch-checkpoints --bench vbench
+```
+
+**Step 3 — lay out the videos** in the per-bench layout from §11. For VBench v1, flat under `<model>/`:
+
+```
+~/myeval/videos/
+  MyModel/
+    clip_0001-0.mp4
+    clip_0002-0.mp4
+    ...
+```
+
+The filename stem before `-<sample_idx>` must equal the `prompt_id` in your prompt file. One video per prompt → use `-0`.
+
+**Step 4 — write the prompt file.** One JSONL line per video, matching the §11.1 schema for your benchmark. For VBench v1 the minimal schema is:
+
+```jsonl
+{"prompt_id": "clip_0001", "text": "a red fox trotting through snow", "prompt": "a red fox trotting through snow", "dimensions": ["subject_consistency", "motion_smoothness", "imaging_quality", "aesthetic_quality"]}
+{"prompt_id": "clip_0002", "text": "a city street at night with neon signs", "prompt": "a city street at night with neon signs", "dimensions": ["subject_consistency", "motion_smoothness", "imaging_quality", "aesthetic_quality"]}
+```
+
+For prompt-dependent dims (`object_class`, `color`, `human_action`, `scene`, …) you also need an `auxiliary_info` tag — run the auto-labeler (§12) to generate it.
+
+**Step 5 — start a judge if the benchmark needs one.** VBench v1 and WorldScore need none. VBench-2.0, Video-Bench, WorldJen, T2V-CompBench do — start a local vLLM (§7) or export an API key, then pass `--judge`.
+
+**Step 6 — run the eval:**
+
+```bash
+videvalkit eval --bench vbench \
+    --videos ~/myeval/videos \
+    --workspace ~/myeval/ws \
+    --models MyModel \
+    --dimensions subject_consistency --dimensions motion_smoothness \
+    --dimensions imaging_quality --dimensions aesthetic_quality \
+    --prompts-file ~/myeval/prompts.jsonl
+```
+
+Omit `--dimensions` to run every dimension the benchmark supports. Resume is automatic — re-running skips already-scored `(model, dim, prompt)` triples.
+
+**Step 7 — read the scores.** The per-model summary is written to `~/myeval/ws/results/summary/vbench/MyModel.json` (per-dimension scores + the benchmark headline); the `eval` command also echoes it to stdout. See the "Output files" subsection of §6 for the full layout.
+
+**Step 8 (optional) — compare models.** Repeat steps 3–6 for each model into the **same** workspace, then:
+
+```bash
+videvalkit aggregate --workspace ~/myeval/ws
+# → ~/myeval/ws/results/leaderboard/cross_benchmark.json
+```
+
+> Reminder: if you scored a custom prompt corpus or a subset of dimensions, label the headline as a *partial reproduction* — it is not comparable to the public leaderboard.
 
 ---
 
