@@ -130,11 +130,18 @@ hf auth login
 # 粘贴一个 read-scope token，来源： https://huggingface.co/settings/tokens
 ```
 
-如果你处在企业代理之后或正在使用 HuggingFace 镜像，在拉取前设置 `HF_ENDPOINT`：
+工具集默认从官方端点 **`https://huggingface.co`** 拉取 —— 这是推荐端点，所有 `fetch-*` 命令与上传都基于它验证过。除非你确实无法访问它，否则请使用官方端点。
+
+仅当你处在企业代理之后、无法直连 `huggingface.co` 时，才把 `HF_ENDPOINT` 指向镜像：
 
 ```bash
+# 默认 —— 无需设置任何东西，直接使用官方端点：
+#   HF_ENDPOINT=https://huggingface.co
+# 仅当 huggingface.co 不可达时才用镜像兜底：
 export HF_ENDPOINT=https://hf-mirror.com
 ```
+
+注意：镜像可能过期或丢文件，且会拒绝 `huggingface.co` 签发的 token —— 若设置了镜像后鉴权报 `Invalid user token`，请 `unset HF_ENDPOINT` 后对官方端点重试。
 
 ### 4.2 拉取 smoke 数据
 

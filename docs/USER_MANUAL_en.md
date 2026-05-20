@@ -128,11 +128,18 @@ hf auth login
 # paste a read-scope token from https://huggingface.co/settings/tokens
 ```
 
-If you are behind a corporate proxy or are using a HuggingFace mirror, set `HF_ENDPOINT` before fetching:
+The toolkit fetches from the official endpoint **`https://huggingface.co`** by default — this is the recommended endpoint and the one all `fetch-*` commands and uploads are verified against. Use it unless you specifically cannot reach it.
+
+Only if you are behind a corporate proxy or cannot reach `huggingface.co` directly, you may point `HF_ENDPOINT` at a mirror:
 
 ```bash
+# default — no need to set anything; the official endpoint is used:
+#   HF_ENDPOINT=https://huggingface.co
+# mirror fallback ONLY if huggingface.co is unreachable:
 export HF_ENDPOINT=https://hf-mirror.com
 ```
+
+Note: mirrors can be stale or drop files, and they reject tokens issued by `huggingface.co` — if auth fails with `Invalid user token` while a mirror is set, `unset HF_ENDPOINT` and retry against the official endpoint.
 
 ### 4.2 Fetch smoke data
 
