@@ -284,12 +284,43 @@ class VBench2Benchmark(BaseBenchmark):
                         _os.environ["VBENCH2_CACHE_DIR"] = str(pretrained_hf)
                     try:
                         _os.chdir(repo_root)
+                        # Filter the prompt registry to only the prompts whose
+                        # videos are actually staged. Upstream iterates every
+                        # prompt in full_info_dir and builds a per-prompt
+                        # `video_list`; un-staged prompts get an empty list,
+                        # which Instance_Preservation's compute_anomaly indexes
+                        # (`video_paths[0]`) without guarding -> IndexError.
+                        # Filtering makes vbench2_standard correct for any
+                        # partial/sample video set. On a complete set every
+                        # prompt is kept, so this is a no-op (identical result).
+                        base_info = (
+                            str(full_info_path) if full_info_path
+                            else str(pkg_dir / "VBench2_full_info.json")
+                        )
+                        staged_prompts = set()
+                        for _vp in Path(staged).rglob("*.mp4"):
+                            _st = _vp.stem
+                            staged_prompts.add(
+                                _st.rsplit("-", 1)[0]
+                                if "-" in _st and _st.rsplit("-", 1)[-1].isdigit()
+                                else _st
+                            )
+                        info_dir = base_info
+                        try:
+                            _all = json.loads(Path(base_info).read_text())
+                            _kept = [e for e in _all
+                                     if e.get("prompt_en", "").strip() in staged_prompts]
+                            if _kept and len(_kept) < len(_all):
+                                _fi = Path(out_dir) / "filtered_full_info.json"
+                                _fi.write_text(json.dumps(_kept, ensure_ascii=False))
+                                info_dir = str(_fi)
+                                log.info("vbench2: filtered registry to %d/%d staged prompts",
+                                         len(_kept), len(_all))
+                        except Exception as _e:  # fall back to the full registry
+                            log.warning("vbench2: registry filter skipped (%s)", _e)
                         vb = VBench2(
                             device=device,
-                            full_info_dir=(
-                                str(full_info_path) if full_info_path
-                                else str(pkg_dir / "VBench2_full_info.json")
-                            ),
+                            full_info_dir=info_dir,
                             output_path=out_dir,
                         )
                         vb.evaluate(
