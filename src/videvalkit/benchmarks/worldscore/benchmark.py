@@ -216,6 +216,18 @@ class WorldScoreBenchmark(BaseBenchmark):
             elif d in builders:
                 scorers[d] = builders[d]()
 
+        # style_consistency auto-resolve: the smoke-data / WorldScore layout
+        # ships reference frames in a `refs/` folder beside the split dirs
+        # (`<root>/<model>/refs/<entry_id>.png`). If the caller did not pass
+        # `reference_image_dir`, look for that sibling folder.
+        if reference_image_dir is None and "style_consistency" in wanted:
+            for vs in videos:
+                cand = Path(vs.path).resolve().parent.parent / "refs"
+                if cand.is_dir():
+                    reference_image_dir = cand
+                    log.info("worldscore: auto-resolved reference_image_dir -> %s", cand)
+                    break
+
         results: list[RawResult] = []
         for vs in videos:
             meta = prompt_meta.get(vs.prompt_id, {})
@@ -335,8 +347,15 @@ def _run_dim(dim, frame_paths, prompt_meta, scorers, *, reference_image_dir=None
     if dim == "camera_control":
         cameras_gt = prompt_meta.get("cameras_gt")
         if cameras_gt is None:
-            raise RuntimeError("camera_control requires cameras_gt in prompt meta "
-                               "(generate via runners.camera_error)")
+            raise RuntimeError(
+                "camera_control needs ground-truth cameras (`cameras_gt`) in the "
+                "prompt meta. They are derived from the entry's `camera_path` by "
+                "the prep runner — run it first:\n"
+                "    python -m videvalkit.benchmarks.worldscore.runners.camera_error\n"
+                "(it concatenates the sub-prompt clips and builds GT cameras via "
+                "CameraGen). camera_control is the one worldscore dim that needs "
+                "this prep step; the other 9 run directly."
+            )
         R, T = scorers[dim].score(frame_paths, cameras_gt)
         return [R, T], "droid_camera_err", {"R_err_deg": R, "T_err": T}
     if dim == "motion_smoothness":

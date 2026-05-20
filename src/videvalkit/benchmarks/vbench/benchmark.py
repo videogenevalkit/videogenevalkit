@@ -135,15 +135,26 @@ class VBenchBenchmark(BaseBenchmark):
                 "vbench package not installed; run inside `videvalkit-vbench` env"
             ) from e
         vbench_dir = Path(vbench_mod.__file__).parent
-        info_path = vbench_dir / "VBench_full_info.json"
-        if not info_path.exists():
-            # Some versions place it under prompts/
-            alt = vbench_dir / "prompts" / "VBench_full_info.json"
-            if alt.exists():
-                info_path = alt
-            else:
-                raise FileNotFoundError(f"VBench_full_info.json not found near {vbench_dir}")
-        return json.loads(info_path.read_text())
+        # Search order: the installed `vbench` package, then the copy shipped in
+        # the videogenevalkit/checkpoints HF dataset (fetched by
+        # `videvalkit fetch-checkpoints --bench vbench`). The checkpoint-cache
+        # fallback keeps a clean public install self-sufficient even when the
+        # packaged `vbench` does not bundle the registry.
+        cache = Path(os.environ.get("VIDEVALKIT_CACHE_HOME",
+                                    Path.home() / ".cache" / "videvalkit"))
+        candidates = [
+            vbench_dir / "VBench_full_info.json",
+            vbench_dir / "prompts" / "VBench_full_info.json",
+            cache / "checkpoints" / "vbench" / "VBench_full_info.json",
+        ]
+        for c in candidates:
+            if c.exists():
+                return json.loads(c.read_text())
+        raise FileNotFoundError(
+            f"VBench_full_info.json not found in the vbench package ({vbench_dir}) "
+            f"or the checkpoint cache ({candidates[-1]}). "
+            "Run `videvalkit fetch-checkpoints --bench vbench`."
+        )
 
     def list_required_videos(
         self,
