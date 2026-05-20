@@ -71,3 +71,7 @@ Icon?
 .ipynb_checkpoints
 *.ipynb
 envs/condaenv.*.requirements.txt
+
+# conda-pack env tarball (7.6 GB — lives on HF, never commit)
+videvalkit-env.tar.gz
+*.tar.gz

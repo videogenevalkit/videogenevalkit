@@ -88,7 +88,6 @@ filterpy==1.4.5
 fire==0.7.1
 fonttools==4.62.1
 frozenlist==1.8.0
-fsspec==2026.4.0
 ftfy==6.3.1
 future==1.0.0
 fvcore==0.1.5.post20221221

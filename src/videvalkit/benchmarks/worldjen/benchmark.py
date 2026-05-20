@@ -77,13 +77,14 @@ class WorldJenBenchmark(BaseBenchmark):
                 if not line:
                     continue
                 e = json.loads(line)
+                _text = e.get("enhanced_prompt") or e.get("prompt") or ""
                 yield PromptItem(
                     prompt_id=e["prompt_id"],
-                    text=e.get("enhanced_prompt") or e["prompt"],
+                    text=_text,
                     dimensions=list(wanted & set(self.dimensions)) or list(self.dimensions),
                     meta={
                         "prompt_set": e.get("prompt_set", "unknown"),
-                        "original_prompt": e["prompt"],
+                        "original_prompt": e.get("prompt") or _text,
                     },
                 )
 
