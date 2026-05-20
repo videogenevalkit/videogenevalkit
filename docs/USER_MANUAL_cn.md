@@ -27,9 +27,8 @@
 9. [跨基准聚合](#9-跨基准聚合)
 10. [独立度量](#10-独立度量)
 11. [生成你自己的视频](#11-生成你自己的视频)
-12. [自定义 prompt（自动标注器）](#12-自定义-prompt自动标注器)
-13. [故障排查与常见问题](#13-故障排查与常见问题)
-14. [许可证与引用](#14-许可证与引用)
+12. [故障排查与常见问题](#12-故障排查与常见问题)
+13. [许可证与引用](#13-许可证与引用)
 
 ---
 
@@ -393,7 +392,7 @@ videvalkit eval --bench vbench \
 
 **Checkpoint：** `vbench/pretrained/dino_model/dino_vitbase16_pretrain.pth`（343 MB）。等价的直接 API 调用：`huggingface_hub.snapshot_download(repo_id="videogenevalkit/checkpoints", repo_type="dataset", allow_patterns=["vbench/pretrained/dino_model/*", "vbench/VBench_full_info.json"])`。
 
-**注意事项：** `dynamic_degree` 是噪声最大的一维（RAFT 在 GPU 上的非确定性），该维容忍带需放宽至 ±0.025。`human_action` 依赖 YOLOv5x 权重；请用 `checksums.json` 校验 SHA-256。对于依赖 prompt 的维度（`object_class`、`color`、`spatial_relationship`、`scene`、`human_action`、`multiple_objects`），自定义 prompt 必须携带 `auxiliary_info` 标签；若无，请使用自动标注器（见第 12 节）。
+**注意事项：** `dynamic_degree` 是噪声最大的一维（RAFT 在 GPU 上的非确定性），该维容忍带需放宽至 ±0.025。`human_action` 依赖 YOLOv5x 权重；请用 `checksums.json` 校验 SHA-256。对于依赖 prompt 的维度（`object_class`、`color`、`spatial_relationship`、`scene`、`human_action`、`multiple_objects`），自定义 prompt 必须携带 `auxiliary_info` 标签（期望的物体／颜色／动作／场景）。
 
 **验证：** HunyuanVideo 全集清扫，16/16 维都落在 ±0.025 内；与 HF 排行榜的 mean |Δ| 为 0.012。
 
@@ -979,7 +978,7 @@ videvalkit fetch-checkpoints --bench vbench
 {"prompt_id": "clip_0002", "text": "a city street at night with neon signs", "prompt": "a city street at night with neon signs", "dimensions": ["subject_consistency", "motion_smoothness", "imaging_quality", "aesthetic_quality"]}
 ```
 
-对于依赖 prompt 的维度（`object_class`、`color`、`human_action`、`scene` 等），还需要 `auxiliary_info` 标签 —— 用自动标注器（第 12 节）生成。
+对于依赖 prompt 的维度（`object_class`、`color`、`human_action`、`scene` 等），每条 prompt 还需要 `auxiliary_info` 标签 —— 即该维度评分器要匹配的期望物体／颜色／动作／场景。
 
 **第 5 步 —— 若基准需要 judge 则先启动。** VBench v1 与 WorldScore 不需要。VBench-2.0、Video-Bench、WorldJen、T2V-CompBench 需要 —— 启动本地 vLLM（第 7 节）或导出 API key，然后传 `--judge`。
 
@@ -1008,37 +1007,49 @@ videvalkit aggregate --workspace ~/myeval/ws
 
 > 提醒：若你评测的是自定义 prompt 语料或只跑了部分维度，请把头条分标注为*部分复现* —— 它不可与公开排行榜对比。
 
----
+### 11.3 排行榜分数是如何计算的
 
-## 12. 自定义 prompt（自动标注器）
+打分分两个层级。两者均已于 2026-05-20 实跑验证。
 
-VBench v1 与 VBench-2.0 中依赖 prompt 的维度（`object_class`、`color`、`spatial_relationship`、`scene`、`human_action`、`multiple_objects`，以及 VBench-2.0 的多数维度）需要每条 prompt 上携带 `auxiliary_info` 标签——上游代码据此组装检测/匹配 prompt。自定义 prompt 默认没有这些标签。
+**层级 1 —— 逐基准头条分。** 每次 `videvalkit eval` 运行结束时，会把逐视频的 raw 结果聚合为一个头条数字，写入 `results/summary/<bench>/<model>.json` 的 `overall` 字段。算法：(1) 把每个维度的 raw 分数在其全部 prompt 上求均值；(2) 对基准定义了归一化区间的维度做逐维 min/max 归一化；(3) 用基准的聚合器把逐维值合并。各基准的默认聚合器：
 
-自动标注器借助本地 LLM 补齐缺口：
+| Bench | 聚合器 | 头条公式 |
+|---|---|---|
+| `vbench` | `vbench_weighted` | 逐维权重（除 `dynamic_degree` = 0.5 外均为 1.0），再 `Total = 0.54·Quality + 0.46·Semantic` |
+| `vbench2` | `vbench2_category` | 5 个类别各自取均值，再对 5 个类别算术平均 → `Overall` |
+| `videobench` | `weighted_sum` | 9 个维度算术平均 |
+| `worldjen` | `phas` | 逐维均值的加权和，权重为论文校准值 |
+| `worldscore` | `weighted_sum` | `WorldScore-Static` = 7 个静态维均值 ×100；`WorldScore-Dynamic` = 全部 10 维均值 ×100 |
+| `t2vcompbench` | `weighted_sum` | 7 个维度无权均值 |
 
-```bash
-python scripts/auto_label_prompts.py \
-  --prompts /data/my_prompts/prompts.jsonl \
-  --out-dir runs/my_ws/prompts/auto_labels \
-  --benchmarks vbench,vbench2 \
-  --judge qwen3-32b-local
+可用 `--aggregator <name>` 覆盖（注册表：`weighted_sum`、`vbench_weighted`、`vbench2_category`、`phas`、`bt`）。示例 —— `weighted_sum` 在 3 个维度上、用 VBench 权重：
+
+```
+逐维（在 prompt 上求均值）:  subject_consistency=0.90  motion_smoothness=0.97  dynamic_degree=0.50
+权重:                        1.0                       1.0                     0.5
+头条 = (0.90·1.0 + 0.97·1.0 + 0.50·0.5) / (1.0 + 1.0 + 0.5) = 2.12 / 2.5 = 0.848
 ```
 
-输出目录下生成 `vbench_full_info.json` 与 `vbench2_full_info.json`，每条 prompt 一项，附带自动抽取的 `auxiliary_info` 块。逐维度的 LLM schema 打包在 `videvalkit/prompt_labelers/` 中。
+**层级 2 —— 跨基准排行榜。** `videvalkit aggregate --workspace <ws>` 读取每个 `summary/<bench>/<model>.json`，写出 `results/leaderboard/cross_benchmark.json`：
 
-使用自动标注后的文件：
+1. 对每个基准，把头条分在 workspace 内所有模型上做 z-score 归一化（这样 `worldscore` 的头条 56 与 `vbench` 的头条 0.83 才可比）。
+2. 每个模型的统一分 = 它参与的各基准 z-score 的均值。
+3. 按统一分排名；同时从隐含的两两比较拟合 Bradley-Terry 评级。
 
 ```bash
-videvalkit eval --bench vbench \
-  --prompts-file runs/my_ws/prompts/auto_labels/vbench_full_info.json \
-  --videos ... --workspace ...
+videvalkit aggregate --workspace ~/myeval/ws
+#   #1  ModelA   z=+1.188
+#   #2  ModelC   z=+0.068
+#   #3  ModelB   z=-1.256
 ```
 
-注意事项：自动标注效果良好但并非完美。局限性见 TEST_MANUAL 第 2.4 节。如要主张 paper-Delta，请始终使用上游原版 prompt。
+排行榜只有在 workspace 内有 **2 个及以上模型**时才有意义 —— z-score 需要离散度。单模型 workspace 仍能产出有效的逐基准头条分，但排名退化。
+
+**验证代码。** 聚合路径已于 2026-05-20 做过单元检查：`WeightedSumAggregator` 与 `PHASAggregator` 能从 `RawResult` 列表产出区间内的头条分，`combine_summaries` 能产出 z 归一化排名及 Bradley-Terry 评级（上面的示例输出即来自该检查）。要在你自己的 workspace 上复验，直接跑 `videvalkit aggregate` 即可 —— 任何 `summary/*.json` 损坏它都会显式报错。
 
 ---
 
-## 13. 故障排查与常见问题
+## 12. 故障排查与常见问题
 
 请先运行 `videvalkit doctor`，多数问题会一目了然。
 
@@ -1061,7 +1072,7 @@ videvalkit eval --bench vbench \
 
 ---
 
-## 14. 许可证与引用
+## 13. 许可证与引用
 
 工具集本身（本代码库）使用 **Apache-2.0** 许可证。各个被适配的上游各自持有自己的许可证，集中陈列于仓库根的 `LICENSES/`。
 

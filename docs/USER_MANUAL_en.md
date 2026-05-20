@@ -25,9 +25,8 @@ This manual is an end-user how-to. It explains what `videvalkit` does, how to in
 9. [Cross-benchmark aggregation](#9-cross-benchmark-aggregation)
 10. [Standalone metrics](#10-standalone-metrics)
 11. [Generating your own videos](#11-generating-your-own-videos)
-12. [Custom prompts (auto-labeler)](#12-custom-prompts-auto-labeler)
-13. [Troubleshooting and FAQ](#13-troubleshooting-and-faq)
-14. [License and citation](#14-license-and-citation)
+12. [Troubleshooting and FAQ](#12-troubleshooting-and-faq)
+13. [License and citation](#13-license-and-citation)
 
 ---
 
@@ -391,7 +390,7 @@ videvalkit eval --bench vbench \
 
 **Checkpoint:** `vbench/pretrained/dino_model/dino_vitbase16_pretrain.pth` (343 MB) — equivalent to `huggingface_hub.snapshot_download(repo_id="videogenevalkit/checkpoints", repo_type="dataset", allow_patterns=["vbench/pretrained/dino_model/*", "vbench/VBench_full_info.json"])`.
 
-**Gotchas:** `dynamic_degree` is the noisiest dim because of RAFT GPU non-determinism; widen tolerance to ±0.025 for that dim. `human_action` depends on YOLOv5x weights; verify the SHA-256 in `checksums.json`. For prompt-dependent dims (`object_class`, `color`, `spatial_relationship`, `scene`, `human_action`, `multiple_objects`) custom prompts must carry `auxiliary_info` tags; use the auto-labeler (section 12) if your prompts do not.
+**Gotchas:** `dynamic_degree` is the noisiest dim because of RAFT GPU non-determinism; widen tolerance to ±0.025 for that dim. `human_action` depends on YOLOv5x weights; verify the SHA-256 in `checksums.json`. For prompt-dependent dims (`object_class`, `color`, `spatial_relationship`, `scene`, `human_action`, `multiple_objects`) custom prompts must carry `auxiliary_info` tags (the expected object / color / action / scene).
 
 **Validation:** HunyuanVideo full-set sweep, 16/16 dims within ±0.025; mean |Δ| 0.012 vs HF leaderboard.
 
@@ -977,7 +976,7 @@ The filename stem before `-<sample_idx>` must equal the `prompt_id` in your prom
 {"prompt_id": "clip_0002", "text": "a city street at night with neon signs", "prompt": "a city street at night with neon signs", "dimensions": ["subject_consistency", "motion_smoothness", "imaging_quality", "aesthetic_quality"]}
 ```
 
-For prompt-dependent dims (`object_class`, `color`, `human_action`, `scene`, …) you also need an `auxiliary_info` tag — run the auto-labeler (§12) to generate it.
+For prompt-dependent dims (`object_class`, `color`, `human_action`, `scene`, …) each prompt also needs an `auxiliary_info` tag — the expected object / color / action / scene the dimension's scorer matches against.
 
 **Step 5 — start a judge if the benchmark needs one.** VBench v1 and WorldScore need none. VBench-2.0, Video-Bench, WorldJen, T2V-CompBench do — start a local vLLM (§7) or export an API key, then pass `--judge`.
 
@@ -1006,37 +1005,49 @@ videvalkit aggregate --workspace ~/myeval/ws
 
 > Reminder: if you scored a custom prompt corpus or a subset of dimensions, label the headline as a *partial reproduction* — it is not comparable to the public leaderboard.
 
----
+### 11.3 How the leaderboard score is calculated
 
-## 12. Custom prompts (auto-labeler)
+Scoring happens at two levels. Both were exercised and verified on 2026-05-20.
 
-VBench v1 and VBench-2.0 prompt-dependent dims (`object_class`, `color`, `spatial_relationship`, `scene`, `human_action`, `multiple_objects`, plus most of VBench-2.0) require per-prompt `auxiliary_info` tags - the upstream code reads these to compose detection / matching prompts. Your custom prompts do not have them.
+**Level 1 — the per-benchmark headline.** Every `videvalkit eval` run ends by aggregating the per-video raw results into one headline number, written as `overall` in `results/summary/<bench>/<model>.json`. The recipe: (1) average each dimension's raw score across all its prompts; (2) apply per-dimension min/max normalization where the benchmark defines it; (3) combine the per-dimension values with the benchmark's aggregator. Each benchmark's default aggregator:
 
-The auto-labeler fills the gap using a local LLM:
+| Bench | Aggregator | Headline formula |
+|---|---|---|
+| `vbench` | `vbench_weighted` | per-dim weight (all 1.0 except `dynamic_degree` = 0.5), then `Total = 0.54·Quality + 0.46·Semantic` |
+| `vbench2` | `vbench2_category` | mean within each of the 5 categories, then arithmetic mean of the 5 → `Overall` |
+| `videobench` | `weighted_sum` | arithmetic mean across the 9 dimensions |
+| `worldjen` | `phas` | weighted sum of per-dimension means with the paper-calibrated weights |
+| `worldscore` | `weighted_sum` | `WorldScore-Static` = mean of the 7 static dims ×100; `WorldScore-Dynamic` = mean of all 10 ×100 |
+| `t2vcompbench` | `weighted_sum` | unweighted mean of the 7 dimensions |
 
-```bash
-python scripts/auto_label_prompts.py \
-  --prompts /data/my_prompts/prompts.jsonl \
-  --out-dir runs/my_ws/prompts/auto_labels \
-  --benchmarks vbench,vbench2 \
-  --judge qwen3-32b-local
+Override with `--aggregator <name>` (registry: `weighted_sum`, `vbench_weighted`, `vbench2_category`, `phas`, `bt`). Worked example — `weighted_sum` on 3 dims with VBench weights:
+
+```
+per-dimension (mean over prompts):  subject_consistency=0.90  motion_smoothness=0.97  dynamic_degree=0.50
+weights:                            1.0                       1.0                     0.5
+headline = (0.90·1.0 + 0.97·1.0 + 0.50·0.5) / (1.0 + 1.0 + 0.5) = 2.12 / 2.5 = 0.848
 ```
 
-Produces `vbench_full_info.json` and `vbench2_full_info.json` in the output directory, each with one entry per prompt containing the auto-extracted `auxiliary_info` block. Per-dim schemas the LLM follows are bundled in `videvalkit/prompt_labelers/`.
+**Level 2 — the cross-benchmark leaderboard.** `videvalkit aggregate --workspace <ws>` reads every `summary/<bench>/<model>.json` and writes `results/leaderboard/cross_benchmark.json`:
 
-Use the auto-labeled file:
+1. For each benchmark, z-score normalize the headline across all models in the workspace (so a `worldscore` headline of 56 and a `vbench` headline of 0.83 become comparable).
+2. Each model's unified score = mean of its z-scores across the benchmarks it ran.
+3. Rank by unified score; also fit Bradley-Terry ratings from the implied pairwise comparisons.
 
 ```bash
-videvalkit eval --bench vbench \
-  --prompts-file runs/my_ws/prompts/auto_labels/vbench_full_info.json \
-  --videos ... --workspace ...
+videvalkit aggregate --workspace ~/myeval/ws
+#   #1  ModelA   z=+1.188
+#   #2  ModelC   z=+0.068
+#   #3  ModelB   z=-1.256
 ```
 
-Caveats: the auto-labeler is good but not perfect. Limitations are documented in TEST_MANUAL section 2.4. For paper-Delta claims always use the upstream prompts verbatim.
+The leaderboard is only meaningful with **2+ models** in the workspace — the z-score needs a spread. A single-model workspace still produces a valid per-benchmark headline, but a degenerate ranking.
+
+**Verifying the code.** The aggregation path was unit-checked on 2026-05-20: `WeightedSumAggregator` and `PHASAggregator` produce in-range headlines from `RawResult` lists, and `combine_summaries` produces the z-normalized ranking plus Bradley-Terry ratings (the example output above is from that check). To re-verify on your own workspace just run `videvalkit aggregate` — it errors loudly if any `summary/*.json` is malformed.
 
 ---
 
-## 13. Troubleshooting and FAQ
+## 12. Troubleshooting and FAQ
 
 Run `videvalkit doctor` first; it surfaces most issues at a glance.
 
@@ -1059,7 +1070,7 @@ For deeper triage when scores look wrong, follow the debug ladder in TEST_MANUAL
 
 ---
 
-## 14. License and citation
+## 13. License and citation
 
 The toolkit (this codebase) is **Apache-2.0**. Each upstream we adapt has its own license, surfaced under `LICENSES/` at the repo root.
 
