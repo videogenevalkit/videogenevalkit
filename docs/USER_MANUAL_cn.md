@@ -149,7 +149,18 @@ videvalkit fetch-smoke-data
 videvalkit fetch-smoke-data --bench worldjen
 ```
 
-smoke 数据默认落盘到 `~/.cache/videvalkit/smoke-data/<bench>/`。每个基准的 smoke 子集即为论文发布的官方视频集或其代表性子集（每基准约 50-200 个视频），足以端到端验证整条流水线，而无需多日 GPU 任务。
+smoke 数据默认落盘到 `~/.cache/videvalkit/smoke-data/<bench>/`。smoke 集是一个精选子集 —— 足以端到端验证整条流水线、无需多日 GPU 任务，但它**并不**包含每个维度的视频。`videogenevalkit/smoke-data` 数据集的实际内容明细：
+
+| Bench | 数据集中的视频数 | 维度覆盖 |
+|---|---:|---|
+| `vbench` | 360 mp4（72 prompt × 5 采样），扁平布局 | **16 维中的 3 维** —— 每个视频可用于 `subject_consistency`、`dynamic_degree`、`motion_smoothness`；其余 13 维需要 smoke 集中不存在的维度专属 prompt |
+| `vbench2` | 324 mp4（108 prompt × 3 采样），全部在 `Camera_Motion/` 下 | **18 维中的 1 维** —— 仅 `Camera_Motion` |
+| `videobench` | 78 mp4，在 `action_consistency/` 下 | **9 维中的 1 维** —— 仅 `action_consistency` |
+| `worldjen` | 50 mp4，扁平布局 | **全部 16 维** —— PHAS 流水线对每个视频在每个维度上打分（不按维度切分） |
+| `worldscore` | 100 个 dynamic + 103 个 static mp4 + 96 个参考帧 | **全部 10 维** —— 100 个 dynamic 视频用于 3 个动态维，103 个 static 视频 + 参考帧用于 7 个静态维 |
+| `t2vcompbench` | 1400 mp4（每维 200 个） | **全部 7 维** —— `consistent_attribute`、`dynamic_attribute`、`action_binding`、`object_interactions`、`spatial_relationships`、`generative_numeracy`、`motion_binding` |
+
+对于 smoke 集只覆盖部分维度的基准（`vbench`、`vbench2`、`videobench`），未覆盖的维度仍可通过 checkpoint 下载 + load-check 验证（见第 4.4 节）；要对这些维度做完整的端到端运行，则需要用各维度的官方 prompt 列表生成视频（见第 11 节）。
 
 ### 4.3 拉取 checkpoints
 
@@ -898,6 +909,33 @@ videvalkit metric \
 | `t2vcompbench` | `<root>/<model>/<dim>/<prompt_id>.mp4`（按维度组织，完整运行每维度 200 prompt） |
 
 布好后将 `<videos_root>` 传给 `videvalkit eval --videos <root>`，适配器会按预期 layout 遍历。逐基准 prompt 文件位于 `~/.cache/videvalkit/smoke-data/<bench>/prompts/`（用于复现论文），自定义 prompt 则通过 `--prompts-file <path>` 传入。
+
+### 11.1 Prompt 组成 —— 不同子维度的 prompt 不一样
+
+一个基准的 prompt 文件**不是**单一的通用 caption 列表。对大多数基准而言，prompt 的 schema *和*内容都是维度专属的：为 `Camera_Motion` 生成的视频无法用于 `Human_Anatomy` 打分，而且评分器读取的 JSONL 字段也随维度而变。写 `--prompts-file` 时，请按你要评测的维度对齐下表的 schema：
+
+| Bench | Prompt JSONL schema | 不同维度间的差异 |
+|---|---|---|
+| `vbench` | `{prompt_id, text, prompt, dimensions[]}` | 9 个*语义*维各自取自**独立**的上游 prompt 列表 —— `object_class` 的 prompt 点名一个物体，`color` 的 prompt 把物体与颜色配对，`human_action` 描述一个动作，`scene` 点名一个场景。这些 prompt 还必须带 `auxiliary_info` 标签（期望的物体／颜色／动作／场景）。7 个*质量*维（`subject_consistency`、`motion_smoothness` 等）共用一份通用 prompt 列表。 |
+| `vbench2` | `{prompt_id, text, prompt, dimensions[], auxiliary_info}` | 全部 18 维都有**各自不同**的 prompt 套件。`auxiliary_info` 是维度专属的 —— 对 `Camera_Motion` 是镜头运动（`zoom_in`、`zoom_out`、`pan_left`、`pan_right`、`tilt_up`、`tilt_down`、`orbits`、`oblique`、`static`）；对 `Human_*`、`Dynamic_*` 维则标注相应属性或状态。 |
+| `videobench` | `{prompt_id, text, prompt, dimensions[]}` | 纯 caption，但 5 个 alignment 维（`object_class_consistency`、`color_consistency`、`action_consistency`、`scene_consistency`、`video_text_consistency`）取自不同的 caption 池；4 个质量维用通用池。 |
+| `worldjen` | `{prompt_id, enhanced_prompt, applicable_groups[], <category>:{<dim>_suitability,<dim>_difficulty}, categories[]}` | 每个视频**一条**丰富的 `enhanced_prompt`，在**全部 16 维**上打分 —— prompt *不*按维度切分。每条 prompt 携带逐维的 `suitability` + `difficulty` 评级，供 PHAS 聚合器使用。 |
+| `worldscore` | `{prompt_id, sample_idx, split, motion_type, style, objects[], prompt, composed_prompt}` | prompt 由 `style` + `objects` + 运动*组合*而成。`split` 为 `static` 或 `dynamic`；只有 `dynamic` prompt 带 `motion_type`。7 个静态维用 static-split 的 prompt（外加参考图 `input_image.png`）；3 个动态维用 dynamic-split 的 prompt。 |
+| `t2vcompbench` | `{prompt_id, text, prompt, dimensions[], meta{…}}` | `meta` 字典**每个维度都不同** —— 见下表。 |
+
+**T2V-CompBench 逐维 `meta` schema** —— 评分器读取的结构化字段（因此各维度的 prompt 文件不可互换）：
+
+| 维度 | `meta` 键 | 示例 |
+|---|---|---|
+| `consistent_attribute` | `phrases` | `phrases = "a blue car; a white picket fence"` |
+| `action_binding` | `phrase_0`、`phrase_1` | `phrase_0 = ["a dog?", "a dog runs through a field?"]` |
+| `dynamic_attribute` | `state 0`、`state 1`、`tag` | `state 0 = "A green leaf"`、`state 1 = "A bright red leaf"` |
+| `generative_numeracy` | `objects`、`numbers` | `objects = "tree"`、`numbers = "1"` |
+| `motion_binding` | `object_1`、`d_1`、`object_2`、`d_2` | `object_1 = "cat"`、`d_1 = "left"` |
+| `spatial_relationships` | `object_1`、`object_2`、`spatial` | `object_1 = "dog"`、`object_2 = "bicycle"`、`spatial = "left"` |
+| `object_interactions` | （无 —— 仅 `prompt`） | `prompt = "Two cars collide at an intersection"` |
+
+**实际影响：** 对 `vbench`、`vbench2`、`t2vcompbench`，你不能跨维度复用同一份 prompt 文件。要评测哪个维度，就用该维度的**官方逐维 prompt 列表**来生成视频。`videvalkit fetch-upstream --bench <name>` 会克隆上游仓库，其 `prompts/` 目录即存放这些逐维列表。
 
 resume（断点续算）是默认行为：重跑相同命令会跳过已有 `results/raw/*.json` 的 `(model, dim, prompt)` 三元组。如需强制重跑，请删除对应 JSON。
 

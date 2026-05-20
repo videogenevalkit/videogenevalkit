@@ -147,7 +147,18 @@ videvalkit fetch-smoke-data
 videvalkit fetch-smoke-data --bench worldjen
 ```
 
-By default, smoke data lands under `~/.cache/videvalkit/smoke-data/<bench>/`. Each bench's smoke set is the official paper-released video set or a representative subset (50-200 videos per bench), enough to verify the full pipeline end-to-end without a multi-day GPU job.
+By default, smoke data lands under `~/.cache/videvalkit/smoke-data/<bench>/`. The smoke set is a curated subset — enough to verify the pipeline end-to-end without a multi-day GPU job, but it does **not** contain videos for every dimension. Breakdown of what the `videogenevalkit/smoke-data` dataset actually contains:
+
+| Bench | Videos in dataset | Dimension coverage |
+|---|---:|---|
+| `vbench` | 360 mp4 (72 prompts × 5 samples), flat layout | **3 of 16** dims — every video is scorable on `subject_consistency`, `dynamic_degree`, `motion_smoothness`; the other 13 dims need dimension-specific prompts not present in the smoke set |
+| `vbench2` | 324 mp4 (108 prompts × 3 samples), all under `Camera_Motion/` | **1 of 18** dims — `Camera_Motion` only |
+| `videobench` | 78 mp4, under `action_consistency/` | **1 of 9** dims — `action_consistency` only |
+| `worldjen` | 50 mp4, flat layout | **all 16** dims — the PHAS pipeline scores every video on every dimension (no per-dim split) |
+| `worldscore` | 100 dynamic + 103 static mp4 + 96 reference frames | **all 10** dims — 100 dynamic videos for the 3 dynamic dims; 103 static videos + reference frames for the 7 static dims |
+| `t2vcompbench` | 1400 mp4 (200 per dimension) | **all 7** dims — `consistent_attribute`, `dynamic_attribute`, `action_binding`, `object_interactions`, `spatial_relationships`, `generative_numeracy`, `motion_binding` |
+
+For a benchmark whose smoke set covers only a subset of dimensions (`vbench`, `vbench2`, `videobench`), the uncovered dimensions can still be validated by checkpoint download + load-check (section 4.4); a full end-to-end run of those dimensions needs videos generated from their official per-dimension prompt lists (see section 11).
 
 ### 4.3 Fetch checkpoints
 
@@ -896,6 +907,33 @@ Per-bench expected layout (see DEV_MANUAL section 4 for the full spec):
 | `t2vcompbench` | `<root>/<model>/<dim>/<prompt_id>.mp4` (dim-organized, 200 prompts per dim for a full run) |
 
 Once laid out, pass the `<videos_root>` to `videvalkit eval --videos <root>` and the adapter walks the expected layout. Per-bench prompt files live under `~/.cache/videvalkit/smoke-data/<bench>/prompts/` (for paper reproduction) or your own `--prompts-file <path>` (for custom prompts).
+
+### 11.1 Prompt composition — prompts differ per dimension
+
+A benchmark's prompt file is **not** one generic caption list. For most benchmarks the prompt schema *and* content are dimension-specific: a video generated for `Camera_Motion` cannot be scored on `Human_Anatomy`, and the JSONL fields the scorer reads change per dimension. When you write a `--prompts-file`, match the schema for the dimension you are targeting:
+
+| Bench | Prompt JSONL schema | How prompts differ per dimension |
+|---|---|---|
+| `vbench` | `{prompt_id, text, prompt, dimensions[]}` | The 9 *semantic* dims each draw from a **separate** upstream prompt list — `object_class` prompts name one object, `color` prompts pair an object with a color, `human_action` prompts describe an action, `scene` prompts name a scene. These prompts must also carry an `auxiliary_info` tag (the expected object / color / action / scene). The 7 *quality* dims (`subject_consistency`, `motion_smoothness`, …) share one generic prompt list. |
+| `vbench2` | `{prompt_id, text, prompt, dimensions[], auxiliary_info}` | All 18 dims have **distinct** prompt suites. `auxiliary_info` is dimension-specific — for `Camera_Motion` it is the camera move (`zoom_in`, `zoom_out`, `pan_left`, `pan_right`, `tilt_up`, `tilt_down`, `orbits`, `oblique`, `static`); for `Human_*` and `Dynamic_*` dims it tags the relevant attribute or state. |
+| `videobench` | `{prompt_id, text, prompt, dimensions[]}` | Plain captions, but the 5 alignment dims (`object_class_consistency`, `color_consistency`, `action_consistency`, `scene_consistency`, `video_text_consistency`) draw from different caption pools; the 4 quality dims use a generic pool. |
+| `worldjen` | `{prompt_id, enhanced_prompt, applicable_groups[], <category>:{<dim>_suitability,<dim>_difficulty}, categories[]}` | **One** rich `enhanced_prompt` per video, scored on **all 16** dims — prompts are *not* split per dimension. Each prompt carries a per-dim `suitability` + `difficulty` rating consumed by the PHAS aggregator. |
+| `worldscore` | `{prompt_id, sample_idx, split, motion_type, style, objects[], prompt, composed_prompt}` | Prompts are *composed* from `style` + `objects` + motion. `split` is `static` or `dynamic`; only `dynamic` prompts carry `motion_type`. The 7 static dims use static-split prompts (plus a reference `input_image.png`); the 3 dynamic dims use dynamic-split prompts. |
+| `t2vcompbench` | `{prompt_id, text, prompt, dimensions[], meta{…}}` | The `meta` dict is **different for every dimension** — see the table below. |
+
+**T2V-CompBench `meta` schema per dimension** — the structured fields the scorer reads (each dimension's prompt file is therefore not interchangeable):
+
+| Dimension | `meta` keys | Example |
+|---|---|---|
+| `consistent_attribute` | `phrases` | `phrases = "a blue car; a white picket fence"` |
+| `action_binding` | `phrase_0`, `phrase_1` | `phrase_0 = ["a dog?", "a dog runs through a field?"]` |
+| `dynamic_attribute` | `state 0`, `state 1`, `tag` | `state 0 = "A green leaf"`, `state 1 = "A bright red leaf"` |
+| `generative_numeracy` | `objects`, `numbers` | `objects = "tree"`, `numbers = "1"` |
+| `motion_binding` | `object_1`, `d_1`, `object_2`, `d_2` | `object_1 = "cat"`, `d_1 = "left"` |
+| `spatial_relationships` | `object_1`, `object_2`, `spatial` | `object_1 = "dog"`, `object_2 = "bicycle"`, `spatial = "left"` |
+| `object_interactions` | (none — `prompt` only) | `prompt = "Two cars collide at an intersection"` |
+
+**Practical consequence:** you cannot reuse one prompt file across dimensions for `vbench`, `vbench2`, or `t2vcompbench`. Generate your videos against the **official per-dimension prompt list** for each dimension you intend to score. `videvalkit fetch-upstream --bench <name>` clones the upstream repo whose `prompts/` directory holds these per-dimension lists.
 
 Resume is automatic: re-running the same command skips `(model, dim, prompt)` triples whose `results/raw/*.json` already exists. To force a re-run, delete the JSONs.
 
