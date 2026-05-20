@@ -254,6 +254,8 @@ Each subsection below is a complete copy-pasteable running example: fetch the sm
 
 Run-to-run variance: ±0.05 on CV-based dims (DINO, CoTracker3, SEA-RAFT, GroundingDINO), ±0.15 on VLM-judge dims (Gemma-4-31B, LLaVA-1.6-34B). Tolerance bands per dim in [`TEST_MANUAL.md`](TEST_MANUAL.md) §3.
 
+**Running on more than 3 videos.** There is no `--limit` flag — `videvalkit eval` scores *every* video found under `--videos`. The 3-video cap in each recipe below comes solely from the `| head -3` filter in the staging step. To run the full set, either drop `| head -3` so all videos are symlinked, or point `--videos` straight at the source directory and skip staging entirely. Note that `fetch-smoke-data` only pulls a **subsample** (the `videogenevalkit/smoke-data` HF dataset — e.g. 50 WorldJen videos, ~3 per dim for the others); removing `| head -3` runs every video *in that subsample*, not the full official benchmark corpus. For the complete corpus you must generate videos with your own model over each benchmark's official prompt list (`videvalkit fetch-upstream --bench <name>` pulls those prompt manifests).
+
 Source material for the dim definitions and per-bench design: DEV_MANUAL section 15.3.1 (per-dim deps) and TEST_MANUAL section 4 (validation results).
 
 ### 6.1 VBench v1

@@ -256,6 +256,8 @@ cat runs/first/results/summary/worldjen/Kling.json
 
 运行间方差：CV 类维度（DINO、CoTracker3、SEA-RAFT、GroundingDINO）约 ±0.05；VLM judge 类维度（Gemma-4-31B、LLaVA-1.6-34B）约 ±0.15（temperature=0.2 采样所致）。各维容忍带详见 [`TEST_MANUAL.md`](TEST_MANUAL.md) §3。
 
+**跑超过 3 个视频。** 没有 `--limit` 参数 —— `videvalkit eval` 会对 `--videos` 目录下找到的*每一个*视频打分。下文各示例中的「3 个视频」上限完全来自暂存步骤里的 `| head -3` 过滤。要跑全集，可以去掉 `| head -3`（软链全部视频），或者直接把 `--videos` 指向源目录、跳过暂存步骤。注意 `fetch-smoke-data` 只拉取一个**子样本**（HF 数据集 `videogenevalkit/smoke-data` —— 例如 WorldJen 50 个视频、其余基准每维约 3 个）；去掉 `| head -3` 是跑完该*子样本*中的所有视频，而非完整的官方基准全集。要跑完整全集，需用你自己的模型在各基准的官方 prompt 列表上生成视频（`videvalkit fetch-upstream --bench <name>` 可拉取这些 prompt 清单）。
+
 各维定义与设计源材料：DEV_MANUAL 第 15.3.1 节（逐维依赖）与 TEST_MANUAL 第 4 节（验证结果）。
 
 ### 6.1 VBench v1
