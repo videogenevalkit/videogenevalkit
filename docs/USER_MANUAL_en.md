@@ -1020,7 +1020,21 @@ Scoring happens at two levels. Both were exercised and verified on 2026-05-20.
 | `worldscore` | `weighted_sum` | `WorldScore-Static` = mean of the 7 static dims ×100; `WorldScore-Dynamic` = mean of all 10 ×100 |
 | `t2vcompbench` | `weighted_sum` | unweighted mean of the 7 dimensions |
 
-Override with `--aggregator <name>` (registry: `weighted_sum`, `vbench_weighted`, `vbench2_category`, `phas`, `bt`). Worked example — `weighted_sum` on 3 dims with VBench weights:
+The headline is produced **automatically by `videvalkit eval`** — there is no separate command. Each eval run ends with the aggregation step:
+
+```bash
+videvalkit eval --bench vbench \
+    --videos ~/myeval/videos \
+    --workspace ~/myeval/ws \
+    --models MyModel
+# → headline written to ~/myeval/ws/results/summary/vbench/MyModel.json (the "overall" field)
+# → also echoed to stdout as JSON
+
+# read just the headline back:
+python -c "import json; print(json.load(open('$HOME/myeval/ws/results/summary/vbench/MyModel.json'))['overall'])"
+```
+
+Override the aggregator with `--aggregator <name>` (registry: `weighted_sum`, `vbench_weighted`, `vbench2_category`, `phas`, `bt`) — e.g. `videvalkit eval --bench vbench ... --aggregator vbench_weighted`. Worked example — `weighted_sum` on 3 dims with VBench weights:
 
 ```
 per-dimension (mean over prompts):  subject_consistency=0.90  motion_smoothness=0.97  dynamic_degree=0.50

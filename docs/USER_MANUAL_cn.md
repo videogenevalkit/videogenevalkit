@@ -1022,7 +1022,21 @@ videvalkit aggregate --workspace ~/myeval/ws
 | `worldscore` | `weighted_sum` | `WorldScore-Static` = 7 个静态维均值 ×100；`WorldScore-Dynamic` = 全部 10 维均值 ×100 |
 | `t2vcompbench` | `weighted_sum` | 7 个维度无权均值 |
 
-可用 `--aggregator <name>` 覆盖（注册表：`weighted_sum`、`vbench_weighted`、`vbench2_category`、`phas`、`bt`）。示例 —— `weighted_sum` 在 3 个维度上、用 VBench 权重：
+头条分由 **`videvalkit eval` 自动产出** —— 没有单独的命令。每次 eval 运行都以聚合步骤结束：
+
+```bash
+videvalkit eval --bench vbench \
+    --videos ~/myeval/videos \
+    --workspace ~/myeval/ws \
+    --models MyModel
+# → 头条分写入 ~/myeval/ws/results/summary/vbench/MyModel.json（`overall` 字段）
+# → 同时以 JSON 形式打印到 stdout
+
+# 只读回头条分：
+python -c "import json; print(json.load(open('$HOME/myeval/ws/results/summary/vbench/MyModel.json'))['overall'])"
+```
+
+可用 `--aggregator <name>` 覆盖聚合器（注册表：`weighted_sum`、`vbench_weighted`、`vbench2_category`、`phas`、`bt`）—— 例如 `videvalkit eval --bench vbench ... --aggregator vbench_weighted`。示例 —— `weighted_sum` 在 3 个维度上、用 VBench 权重：
 
 ```
 逐维（在 prompt 上求均值）:  subject_consistency=0.90  motion_smoothness=0.97  dynamic_degree=0.50
