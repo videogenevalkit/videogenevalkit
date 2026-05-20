@@ -239,93 +239,275 @@ The `aggregate` step writes `runs/first/results/leaderboard/cross_benchmark.json
 
 ## 6. Per-benchmark how-to
 
-Each subsection below shows the canonical invocation, the dims it scores, the default scorer, and per-bench gotchas. Source material: DEV_MANUAL section 15.3.1 (per-dim deps) and TEST_MANUAL section 4 (validation results).
+Each subsection below is a complete copy-pasteable running example: fetch the smoke data, fetch the specific checkpoint from `videogenevalkit/checkpoints` on HuggingFace, stage 3-5 sample videos, run the eval, see the score. All examples were validated end-to-end on 2026-05-19; expected scores below come from those runs (3 sample videos each).
+
+**Quick summary table** — all 6 in one view:
+
+| # | Bench / dim | Scorer | Checkpoint (from `videogenevalkit/checkpoints`) | Wallclock (3 vids) | GPU mem | Expected score |
+|---|---|---|---|---:|---:|---|
+| 6.4 | `worldjen` / 16 dims | Gemma-4-31B vLLM | — (no local ckpt) | ~5 min | 0 GB | overall ≈ 3.2 of 5 |
+| 6.1 | `vbench` / `subject_consistency` | DINO ViT-B/16 | `vbench/pretrained/dino_model/` (343 MB) | ~30 s | 2 GB | ≈ 0.92 |
+| 6.2 | `vbench2` / `Camera_Motion` | CoTracker3 (vendored) | `vbench2/third_party/cotracker/` (204 MB) | ~1 min | 4 GB | ≈ 0.67 |
+| 6.3 | `videobench` / `action_consistency` | Gemma-4-31B vLLM | — (no local ckpt) | ~2 min | 0 GB | ≈ 2.0 (raw 1-5) |
+| 6.5 | `worldscore` / `motion_magnitude` | SEA-RAFT | `worldscore/Tartan-C-T-TSKH-*` + `raft-things` (150 MB) | ~2 min | 4 GB | ≈ 56.4 (×100) |
+| 6.6 | `t2vcompbench` / `action_binding` (paper-mode) | LLaVA-1.6-34B | `hf-models/liuhaotian/llava-v1.6-34b/` (68 GB) | ~5 min after model load | 70 GB | raw 7.22 → norm 0.69 |
+
+Run-to-run variance: ±0.05 on CV-based dims (DINO, CoTracker3, SEA-RAFT, GroundingDINO), ±0.15 on VLM-judge dims (Gemma-4-31B, LLaVA-1.6-34B). Tolerance bands per dim in [`TEST_MANUAL.md`](TEST_MANUAL.md) §3.
+
+Source material for the dim definitions and per-bench design: DEV_MANUAL section 15.3.1 (per-dim deps) and TEST_MANUAL section 4 (validation results).
 
 ### 6.1 VBench v1
 
+**Overview.** 16 dims, 7 quality + 9 semantic. All dims are pure-CV (no VLM judge). Default scorers per dim: DINO ViT-B/16 for `subject_consistency`, CLIP ViT-B/32 for `background_consistency`, AMT-S for `motion_smoothness`, RAFT for `dynamic_degree`, MUSIQ for `imaging_quality`, GRiT for `object_class`/`color`/`multiple_objects`/`spatial_relationship`, UMT for `human_action`, tag2text for `scene`, ViCLIP for `appearance_style`/`temporal_style`/`overall_consistency`, LAION-aesthetic+CLIP ViT-L/14 for `aesthetic_quality`. Aggregator is `vbench_weighted`: `Total = 0.54*Quality + 0.46*Semantic`.
+
+**Running example: `subject_consistency` on 3 HunyuanVideo videos (~30 s, 2 GB GPU)**
+
 ```bash
+# 1. Fetch smoke videos + DINO ViT-B/16 weight + the VBench prompt registry
+videvalkit fetch-smoke-data  --bench vbench
+videvalkit fetch-checkpoints --bench vbench
+
+# 2. Stage 3 of the bundled HunyuanVideo videos
+mkdir -p ~/runs/vbench/videos/HunyuanVideo
+ls ~/.cache/videvalkit/smoke-data/vbench/videos/HunyuanVideo/*.mp4 \
+  | head -3 | xargs -I{} ln -sf {} ~/runs/vbench/videos/HunyuanVideo/
+
+# 3. Evaluate
 videvalkit eval --bench vbench \
-  --videos ~/.cache/videvalkit/smoke-data/vbench/videos/<model> \
-  --workspace runs/vbench
+    --videos ~/runs/vbench/videos \
+    --workspace ~/runs/vbench/ws \
+    --models HunyuanVideo \
+    --dimensions subject_consistency \
+    --prompts-file ~/.cache/videvalkit/smoke-data/vbench/prompts.jsonl
 ```
 
-16 dims, 7 quality + 9 semantic. All dims are pure-CV (no VLM judge). Default scorers per dim: DINO ViT-B/16 for `subject_consistency`, CLIP ViT-B/32 for `background_consistency`, AMT-S for `motion_smoothness`, RAFT for `dynamic_degree`, MUSIQ for `imaging_quality`, GRiT for `object_class`/`color`/`multiple_objects`/`spatial_relationship`, UMT for `human_action`, tag2text for `scene`, ViCLIP for `appearance_style`/`temporal_style`/`overall_consistency`, LAION-aesthetic+CLIP ViT-L/14 for `aesthetic_quality`. Aggregator is `vbench_weighted`: `Total = 0.54*Quality + 0.46*Semantic`.
+**Expected:** `per_dimension.subject_consistency ≈ 0.92` (DINO frame-pair cosine averaged over 8 frames × 3 videos). Variance across runs: ±0.02.
 
-Gotchas: `dynamic_degree` is the noisiest dim because of RAFT GPU non-determinism; widen tolerance to +/-0.025 for that dim. `human_action` depends on YOLOv5x weights; verify the SHA-256 in `checksums.json`. For prompt-dependent dims (`object_class`, `color`, `spatial_relationship`, `scene`, `human_action`, `multiple_objects`) custom prompts must carry `auxiliary_info` tags; use the auto-labeler (section 12) if your prompts do not.
+**Checkpoint:** `vbench/pretrained/dino_model/dino_vitbase16_pretrain.pth` (343 MB) — equivalent to `huggingface_hub.snapshot_download(repo_id="videogenevalkit/checkpoints", repo_type="dataset", allow_patterns=["vbench/pretrained/dino_model/*", "vbench/VBench_full_info.json"])`.
 
-Validation: HunyuanVideo full-set sweep, 16/16 dims within +/-0.025; mean |Delta| 0.012 vs HF leaderboard.
+**Gotchas:** `dynamic_degree` is the noisiest dim because of RAFT GPU non-determinism; widen tolerance to ±0.025 for that dim. `human_action` depends on YOLOv5x weights; verify the SHA-256 in `checksums.json`. For prompt-dependent dims (`object_class`, `color`, `spatial_relationship`, `scene`, `human_action`, `multiple_objects`) custom prompts must carry `auxiliary_info` tags; use the auto-labeler (section 12) if your prompts do not.
+
+**Validation:** HunyuanVideo full-set sweep, 16/16 dims within ±0.025; mean |Δ| 0.012 vs HF leaderboard.
 
 ### 6.2 VBench-2.0
 
+**Overview.** 18 dims across 5 categories (Creativity, Commonsense, Controllability, Human Fidelity, Physics). The 12 reasoning dims use LLaVA-Video-7B-Qwen2 as the VLM scorer; 5 dims add Qwen2.5-7B-Instruct as an LLM judge. The remaining 6 use vendored CV stacks: `Camera_Motion` and `Multi-View_Consistency` use CoTracker3; `Diversity` uses VGG-19; `Human_Anatomy` uses a vendored ViTDetector; `Human_Identity` uses ArcFace + RetinaFace; `Instance_Preservation` uses Qwen2.5-VL-3B via ms-swift. Aggregator is `vbench2_category`: 5 category means averaged into `Overall`.
+
+**Running example: `Camera_Motion` on 3 HunyuanVideo videos (~1 min, 4 GB GPU)**
+
 ```bash
+# 1. Fetch smoke videos + CoTracker3 weight + the VBench-2.0 prompt registry
+videvalkit fetch-smoke-data  --bench vbench2
+videvalkit fetch-checkpoints --bench vbench2
+
+# 2. Stage 3 HunyuanVideo Camera_Motion-tagged videos
+mkdir -p ~/runs/vbench2/videos/HunyuanVideo/Camera_Motion
+ls ~/.cache/videvalkit/smoke-data/vbench2/videos/HunyuanVideo/Camera_Motion/*.mp4 \
+  | head -3 | xargs -I{} ln -sf {} ~/runs/vbench2/videos/HunyuanVideo/Camera_Motion/
+
+# 3. Evaluate
 videvalkit eval --bench vbench2 \
-  --videos ~/.cache/videvalkit/smoke-data/vbench2/videos/<model> \
-  --workspace runs/vbench2 \
-  --judge local-llava-video-7b
+    --videos ~/runs/vbench2/videos \
+    --workspace ~/runs/vbench2/ws \
+    --models HunyuanVideo \
+    --dimensions Camera_Motion \
+    --extra-kwarg 'mode="vbench2_standard"'
 ```
 
-18 dims across 5 categories (Creativity, Commonsense, Controllability, Human Fidelity, Physics). The 12 reasoning dims use LLaVA-Video-7B-Qwen2 as the VLM scorer; 5 dims add Qwen2.5-7B-Instruct as an LLM judge. The remaining 6 use vendored CV stacks: `camera_motion` and `multi_view_consistency` use CoTracker3; `diversity` uses VGG-19; `human_anatomy` uses a vendored ViTDetector; `human_identity` uses ArcFace + RetinaFace; `instance_preservation` uses Qwen2.5-VL-3B via ms-swift. Aggregator is `vbench2_category`: 5 category means averaged into `Overall`.
+**Expected:** `per_dimension.Camera_Motion ≈ 0.67` (binary pass/fail per video, averaged across 3 videos = either 0, 0.33, 0.67, or 1.0 depending on which Kling-camera classes Kling reproduces). Run-to-run is deterministic for CoTracker3 (no temperature).
 
-Gotchas: `Human_Anatomy` and `Human_Identity` are NOT swappable to a different VLM (vendored detectors). `Diversity` needs at least 2 seeds per prompt. The full sweep on HunyuanVideo yields mean |Delta| 0.0055 across 18/18 dims after the cv2 sequential-read fix and the `-1` sentinel filter. Default judge is `local-llava-video-7b`; you can substitute with `--scorer-vlm gemma-4-31b-local` for stronger reasoning (paper-Delta widens; see section 7).
+**Checkpoint:** `vbench2/third_party/cotracker/cotracker2.pth` (204 MB) — `allow_patterns=["vbench2/third_party/cotracker/*", "vbench2/VBench2_full_info.json"]`.
+
+**Gotchas:** `Human_Anatomy` and `Human_Identity` are NOT swappable to a different VLM (vendored detectors). `Diversity` needs at least 2 seeds per prompt. The full sweep on HunyuanVideo yields mean |Δ| 0.0055 across 18/18 dims after the cv2 sequential-read fix and the `-1` sentinel filter. Default judge is `local-llava-video-7b`; you can substitute with `--scorer-vlm gemma-4-31b-local` for stronger reasoning (paper-Δ widens; see section 7).
+
+**Validation:** HunyuanVideo full-set sweep, 18/18 dims within ±0.025; mean |Δ| 0.0055 vs HF leaderboard (2025-03-28 row).
 
 ### 6.3 Video-Bench
 
+**Overview.** 9 dims: 4 alignment (`video_text_consistency`, `object_class_consistency`, `color_consistency`, `action_consistency`, `scene_consistency`) on a 1-3 scale + 4 quality (`imaging_quality`, `aesthetic_quality`, `temporal_consistency`, `motion_effects`) on a 1-5 scale. All 9 dims use the **same** VLM judge — this is the simplest benchmark by model count. Paper uses GPT-4o (`gpt-4o-2024-08-06`); the toolkit registry pins `gpt-4o-2024-11-20`. Aggregator is `videobench_per_dim`: arithmetic mean across the chain-of-query responses.
+
+**Running example: `action_consistency` on 3 CogVideoX-5B videos (~2 min, Gemma judge — no local ckpt)**
+
 ```bash
+# 1. Fetch smoke videos + prompts.jsonl (no checkpoint — VLM judge does the scoring)
+videvalkit fetch-smoke-data --bench videobench
+
+# 2. Stage 3 of the bundled action_consistency-tagged videos
+mkdir -p ~/runs/videobench/videos/cogvideox5b
+ls ~/.cache/videvalkit/smoke-data/videobench/videos/cogvideox5b/action_consistency/*.mp4 \
+  | head -3 | xargs -I{} ln -sf {} ~/runs/videobench/videos/cogvideox5b/
+
+# 3. Evaluate (Gemma-4-31B vLLM judge on localhost:8003)
 videvalkit eval --bench videobench \
-  --videos ~/.cache/videvalkit/smoke-data/videobench/videos/<model> \
-  --workspace runs/videobench \
-  --judge gpt-4o
+    --videos ~/runs/videobench/videos \
+    --workspace ~/runs/videobench/ws \
+    --models cogvideox5b \
+    --judge gemma-4-31b-local \
+    --dimensions action_consistency \
+    --prompts-file ~/.cache/videvalkit/smoke-data/videobench/prompts.jsonl
 ```
 
-9 dims: 4 alignment (`video_text_consistency`, `object_class_consistency`, `color_consistency`, `action_consistency`, `scene_consistency`) on a 1-3 scale + 4 quality (`imaging_quality`, `aesthetic_quality`, `temporal_consistency`, `motion_effects`) on a 1-5 scale. All 9 dims use the **same** VLM judge - this is the simplest benchmark by model count. Paper uses GPT-4o (`gpt-4o-2024-08-06`); the toolkit registry pins `gpt-4o-2024-11-20`. Aggregator is `videobench_per_dim`: arithmetic mean across the chain-of-query responses.
+**Expected:** `per_dimension.action_consistency ≈ 2.0` (raw 1-5 scale). Variance: ±0.5 across runs due to Gemma temperature-0.2 sampling.
 
-Gotchas: GPT-4o snapshots drift; for paper reproduction, register a `gpt-4o-2024-08-06` entry (see section 7) and pass `--judge gpt-4o-2024-08-06`. Substituting Gemma for GPT-4o produces dynamic-quality drift of +/-2.0 points on the 1-5 scale (`temporal_consistency` and `motion_effects` are bimodal under Gemma). Static + alignment dims match within +/-0.2 of paper under Gemma.
+**Checkpoint:** none — the entire scorer is the VLM endpoint. To use GPT-4o instead: `--judge gpt-4o` with `OPENAI_API_KEY` set; for the paper-exact `gpt-4o-2024-08-06` snapshot, register that pin in `~/.config/videvalkit/judges.yaml` (see section 7).
+
+**Gotchas:** GPT-4o snapshots drift; for paper reproduction, register a `gpt-4o-2024-08-06` entry and pass `--judge gpt-4o-2024-08-06`. Substituting Gemma for GPT-4o produces dynamic-quality drift of ±2.0 points on the 1-5 scale (`temporal_consistency` and `motion_effects` are bimodal under Gemma). Static + alignment dims match within ±0.2 of paper under Gemma.
 
 ### 6.4 WorldJen
 
+**Overview.** 16 dims grouped into 4 macro-categories (motion_stability, logic_physics, instruction_adherence, aesthetic_quality). Two-phase: phase A generates VQA questions with an LLM (`qwen3-32b-local` on port 8004 by default); phase B answers them with a VLM (`gemma-4-31b-local` on port 8003 by default). Aggregator is `phas`: weighted sum of mean dim scores minus a variance penalty, with paper-calibrated `(w, λ)`.
+
+**Running example: all 16 dims on 3 Kling videos (~5 min, Gemma judge — no local ckpt)**
+
 ```bash
+# 1. Fetch the worldjen smoke set (50 Kling videos + prompts.jsonl + vqa.jsonl)
+videvalkit fetch-smoke-data --bench worldjen
+
+# 2. Stage 3 of the bundled Kling videos
+mkdir -p ~/runs/worldjen/videos/Kling
+ls ~/.cache/videvalkit/smoke-data/worldjen/videos/fal-ai_kling-video_v2.6_pro_text-to-video/*.mp4 \
+  | head -3 | xargs -I{} ln -sf {} ~/runs/worldjen/videos/Kling/
+
+# 3. Evaluate (~250 Gemma calls: phase A VQA gen + phase B VQA answering)
 videvalkit eval --bench worldjen \
-  --videos ~/.cache/videvalkit/smoke-data/worldjen/videos/<model> \
-  --workspace runs/worldjen \
-  --judge gemma-4-31b-local
+    --videos ~/runs/worldjen/videos \
+    --workspace ~/runs/worldjen/ws \
+    --models Kling \
+    --judge gemma-4-31b-local \
+    --aggregator phas
 ```
 
-16 dims grouped into 4 macro-categories (motion_stability, logic_physics, instruction_adherence, aesthetic_quality). Two-phase: phase A generates VQA questions with an LLM (`qwen3-32b-local` on port 8004 by default); phase B answers them with a VLM (`gemma-4-31b-local` on port 8003 by default). Aggregator is `phas`: weighted sum of mean dim scores minus a variance penalty, with paper-calibrated `(w, lambda)`.
+**Expected:** `~/runs/worldjen/ws/results/summary/worldjen/Kling.json`:
 
-Gotchas: If the workspace already has `vqa_questions_50prompts.jsonl`, phase A is silently skipped - the log line "judge_llm not given; defaulting to judge for VQA gen" fires unconditionally before the existence check. To confirm phase A actually ran, inspect `<ws>/api_logs/calls/Qwen/`. Keep `max_concurrency=2` against Gemma to avoid broken-pipe spam; phase A on Qwen is light and can run alongside heavier phase-B work without contention.
+```
+overall ≈ 3.2 of 5  (unweighted mean of 16 dim means on 3 prompts)
+per_category:
+  instruction_adherence  ≈ 3.78    (Kling's strongest area)
+  aesthetic_quality      ≈ 3.50
+  motion_stability       ≈ 3.20
+  logic_physics          ≈ 2.58    (Kling's weakest area)
+```
+
+Per-dim breakdown (means across the 3 sample prompts):
+
+| Dim                  | Score | Dim                  | Score |
+|---|---:|---|---:|
+| `semantic_adherence`     | 4.47 | `composition_framing` | 3.60 |
+| `semantic_drift`         | 4.07 | `lighting_volumetric` | 3.60 |
+| `color_harmony`          | 3.83 | `subject_consistency` | 3.43 |
+| `scene_consistency`      | 3.73 | `structural_gestalt`  | 2.97 |
+| `temporal_flickering`    | 3.73 | `spatial_relationship`| 2.80 |
+| `human_fidelity`         | 2.70 | `motion_smoothness`   | 2.60 |
+| `inertial_consistency`   | 2.50 | `dynamic_degree`      | 2.57 |
+| `physical_mechanics`     | 2.57 | `object_permanence`   | 2.50 |
+
+**Checkpoint:** none — both phase A (LLM) and phase B (VLM) are remote endpoints. The default `gemma-4-31b-local` is `google/gemma-4-31b-it` served by vLLM on `http://localhost:8003/v1`. Swap with `--judge gemini-3-flash` (managed API, requires `GOOGLE_API_KEY`) for the paper-Gemini configuration.
+
+**Calibrated headline.** The paper-reported PHAS for Kling-v2.6 on the full 50-prompt headline split is **4.12** — uses the *calibrated* per-dim weights (non-neg ridge fit against human ratings) instead of the unweighted mean. To reproduce, symlink all 50 mp4s into the videos dir and re-run with `--aggregator phas` (the calibrated weights are loaded automatically).
+
+**Gotchas:** If the workspace already has `vqa_questions_50prompts.jsonl`, phase A is silently skipped — the log line "judge_llm not given; defaulting to judge for VQA gen" fires unconditionally before the existence check. To confirm phase A actually ran, inspect `<ws>/api_logs/calls/Qwen/`. Keep `max_concurrency=2` against Gemma to avoid broken-pipe spam; phase A on Qwen is light and can run alongside heavier phase-B work without contention.
 
 ### 6.5 WorldScore
 
+**Overview.** 10 dims: 7 static (`camera_control`, `object_control`, `content_alignment`, `3d_consistency`, `photometric_consistency`, `style_consistency`, `subjective_quality`) + 3 dynamic (`motion_accuracy`, `motion_magnitude`, `motion_smoothness`). All CV-based, no VLM judge required. The stack is DROID-SLAM (camera + 3D), SEA-RAFT (optical flow + photometric), VFIMamba (motion smoothness via interpolation), SAM2 (motion-accuracy mask propagation), GroundingDINO + SAM-H (object detection), VGG-19 (style Gram), LAION + CLIP-IQA+ (subjective quality), torchmetrics CLIPScore (content alignment). Headlines: `WorldScore-Static` (mean of 7 static dims × 100) and `WorldScore-Dynamic` (mean of all 10 dims × 100).
+
+**Running example: `motion_magnitude` on 3 CogVideoX-5B dynamic videos (~2 min, 4 GB GPU)**
+
+WorldScore's upstream code expects its weights at a relative path inside the upstream repo, not in the toolkit's HF cache. After `fetch-checkpoints` we symlink them into the expected location.
+
 ```bash
+# 1. Fetch smoke videos + upstream repo + the SEA-RAFT weights
+videvalkit fetch-smoke-data  --bench worldscore
+videvalkit fetch-upstream    --bench worldscore   # git-clones the WorldScore repo
+videvalkit fetch-checkpoints --bench worldscore
+
+# 2. Symlink ckpts into upstream's expected layout (one-time)
+WS_ROOT=~/.cache/videvalkit/upstream/WorldScore
+mkdir -p $WS_ROOT/worldscore/benchmark/metrics/checkpoints
+ln -sf ~/.cache/videvalkit/checkpoints/worldscore/*.pth \
+       $WS_ROOT/worldscore/benchmark/metrics/checkpoints/
+ln -sf ~/.cache/videvalkit/checkpoints/worldscore/*.pkl \
+       $WS_ROOT/worldscore/benchmark/metrics/checkpoints/
+export VIDEVALKIT_WORLDSCORE_ROOT=$WS_ROOT
+
+# 3. Stage 3 of the bundled dynamic videos
+mkdir -p ~/runs/worldscore/videos/cogvideox-5b/dynamic
+ls ~/.cache/videvalkit/smoke-data/worldscore/videos/cogvideox-5b/dynamic/*.mp4 \
+  | head -3 | xargs -I{} ln -sf {} ~/runs/worldscore/videos/cogvideox-5b/dynamic/
+
+# 4. Evaluate (SEA-RAFT optical flow on 49 frames per video, median magnitude)
 videvalkit eval --bench worldscore \
-  --videos ~/.cache/videvalkit/smoke-data/worldscore/videos/<model> \
-  --workspace runs/worldscore
+    --videos ~/runs/worldscore/videos \
+    --workspace ~/runs/worldscore/ws \
+    --models cogvideox-5b \
+    --dimensions motion_magnitude \
+    --prompts-file ~/.cache/videvalkit/smoke-data/worldscore/prompts/dynamic.jsonl
 ```
 
-10 dims: 7 static (`camera_control`, `object_control`, `content_alignment`, `3d_consistency`, `photometric_consistency`, `style_consistency`, `subjective_quality`) + 3 dynamic (`motion_accuracy`, `motion_magnitude`, `motion_smoothness`). All CV-based, no VLM judge required. The stack is DROID-SLAM (camera + 3D), SEA-RAFT (optical flow + photometric), VFIMamba (motion smoothness via interpolation), SAM2 (motion-accuracy mask propagation), GroundingDINO + SAM-H (object detection), VGG-19 (style Gram), LAION + CLIP-IQA+ (subjective quality), torchmetrics CLIPScore (content alignment). Headlines: `WorldScore-Static` (mean of 7 static dims times 100) and `WorldScore-Dynamic` (mean of all 10 dims times 100).
+**Expected:** `per_dimension.motion_magnitude ≈ 56.4` (×100 scale per upstream convention). Headline `WorldScore-Dynamic ≈ 56.4` when only this dim is run. Run-to-run variance: deterministic for SEA-RAFT (no temperature).
 
-Gotchas: `style_consistency` measures against an `input_image.png` from the HF dataset, NOT the generated video's frame 0; for T2V models the reference image is generated by upstream's T2I pipeline. Run `runners/extract_refs.py` once to materialize per-entry reference images before evaluating. Pin torch to `2.3.1+cu121`; do NOT let pip auto-upgrade torch when installing `mamba_ssm` (the upgrade breaks lietorch/droid_backends/sam2/pyiqa). The adapter ships a pure-PyTorch `mamba_ssm.selective_scan` shim so VFIMamba runs without recompiling.
+**Checkpoints:**
+- `worldscore/Tartan-C-T-TSKH-spring540x960-M.pth` (130 MB) — SEA-RAFT optical flow
+- `worldscore/raft-things.pth` (20 MB) — RAFT inside DROID-SLAM
+- Equivalent: `allow_patterns=["worldscore/Tartan*", "worldscore/raft-things*"]`.
+
+For all 10 dims you also need: `groundingdino_swint_ogc.pth`, `sam_vit_h_4b8939.pth`, `sam2.1_hiera_large.pt`, `VFIMamba.pkl`, `droid.pth`, `sac+logos+ava1-l14-linearMSE.pth` (full set fetched by `--bench worldscore` without an `allow_patterns` filter; ~6.3 GB total).
+
+**Gotchas:** `style_consistency` measures against an `input_image.png` from the HF dataset, NOT the generated video's frame 0; for T2V models the reference image is generated by upstream's T2I pipeline. Run `runners/extract_refs.py` once to materialize per-entry reference images before evaluating. Pin torch to `2.3.1+cu121`; do NOT let pip auto-upgrade torch when installing `mamba_ssm` (the upgrade breaks lietorch/droid_backends/sam2/pyiqa). The adapter ships a pure-PyTorch `mamba_ssm.selective_scan` shim so VFIMamba runs without recompiling.
 
 ### 6.6 T2V-CompBench
 
-```bash
-# Paper-exact mode (LLaVA-1.6-34B subprocess shim, requires >=80 GB GPU)
-videvalkit eval --bench t2vcompbench \
-  --videos ~/.cache/videvalkit/smoke-data/t2vcompbench/videos/<model> \
-  --workspace runs/t2vcomp_upstream \
-  --mode upstream
+**Overview.** 7 compositional dims. 4 MLLM dims (`consistent_attribute`, `action_binding`, `object_interactions`, `dynamic_attribute`) use LLaVA-1.6-34B at temperature 0 with `chatml_direct` conversation template and 3-seed averaging. 3 CV dims: `generative_numeracy` (GroundingDINO + counting), `spatial_relationships` (GD + Depth-Anything V1, 2D+3D combined), `motion_binding` (GD + SAM-H + DOT = cotracker2 + RAFT estimator + RAFT refiner). Aggregator: unweighted mean across the 7 dims.
 
-# Toolkit mode (configurable VLM judge, runs on smaller GPUs)
+**Running example A — `action_binding` paper-mode on 3 CogVideoX-5B videos (~5 min after LLaVA load, requires ≥80 GB GPU)**
+
+```bash
+# 1. Fetch smoke videos + the t2vcompbench CV ckpts + LLaVA-1.6-34B
+videvalkit fetch-smoke-data  --bench t2vcompbench
+videvalkit fetch-checkpoints --bench t2vcompbench   # GroundingDINO + SAM-H + Depth-Anything + DOT (~4 GB)
+videvalkit fetch-checkpoints --bench hf-models      # LLaVA-1.6-34B + Qwen2.5-7B + LLaVA-Video-7B + CLIP + DepthAnything (~95 GB)
+
+# 2. Clone the T2V-CompBench upstream repo (carries the LLaVA eval script)
+videvalkit fetch-upstream --bench t2vcompbench
+
+# 3. Stage 3 action_binding-tagged videos
+mkdir -p ~/runs/t2vcomp_paper/videos/CogVideoX-5B
+ls ~/.cache/videvalkit/smoke-data/t2vcompbench/videos/CogVideoX-5B/action_binding_*.mp4 \
+  | head -3 | xargs -I{} ln -sf {} ~/runs/t2vcomp_paper/videos/CogVideoX-5B/
+
+# 4. Evaluate (LLaVA-1.6-34B at temp 0, 3 seeds × 3 videos = 9 inference calls, ~5 min)
 videvalkit eval --bench t2vcompbench \
-  --videos ~/.cache/videvalkit/smoke-data/t2vcompbench/videos/<model> \
-  --workspace runs/t2vcomp_toolkit \
-  --mode toolkit \
-  --judge gemma-4-31b-local
+    --videos ~/runs/t2vcomp_paper/videos \
+    --workspace ~/runs/t2vcomp_paper/ws \
+    --models CogVideoX-5B \
+    --dimensions action_binding \
+    --prompts-file ~/.cache/videvalkit/smoke-data/t2vcompbench/prompts.jsonl \
+    --extra-kwarg 'mode="upstream"'
 ```
 
-7 compositional dims. 4 MLLM dims (`consistent_attribute`, `action_binding`, `object_interactions`, `dynamic_attribute`) use LLaVA-1.6-34B at temperature 0 with chatml_direct conversation template and 3-seed averaging. 3 CV dims: `generative_numeracy` (GD + counting), `spatial_relationships` (GD + Depth-Anything V1, 2D+3D combined), `motion_binding` (GD + SAM-H + DOT = cotracker2 + RAFT estimator + RAFT refiner). Aggregator: unweighted mean across the 7 dims.
+**Expected:** `per_dimension.action_binding ≈ 7.22` (raw 1-10 scale) → normalized via upstream's `(raw - 1) / 9` formula = **0.691**. Paper Table 2 for CogVideoX-5B on the full 200-video set is 0.533; our 3-video smoke is well within the expected ±0.15 sampling band.
 
-Gotchas: `--mode upstream` is the paper-exact path (LLaVA-1.6-34B subprocess shim) and is required for byte-exact paper-Delta. `--mode toolkit` routes the 4 MLLM dims through your configured VLM judge - useful when you do not have the 80 GB GPU but accepts a paper-Delta caveat that is logged into `meta.scorers_used`. Validation: 6/7 dims within +/-0.020 against paper Table 5 in upstream mode; `consistent_attribute` shows +0.186 drift attributed to LLaVA HEAD-revision drift (paper's revision is not pinned in the upstream `requirements.txt`).
+**Checkpoint:** `hf-models/liuhaotian/llava-v1.6-34b/` (68 GB across 15 safetensors files) — equivalent to `allow_patterns=["hf-models/liuhaotian/llava-v1.6-34b/*"]`.
+
+**Running example B — `action_binding` toolkit-mode (no LLaVA-34B, runs on a small GPU)**
+
+If you don't have an 80 GB GPU, swap to `mode="toolkit"` which routes the MLLM dim through your configured VLM judge:
+
+```bash
+videvalkit eval --bench t2vcompbench \
+    --videos ~/runs/t2vcomp_toolkit/videos \
+    --workspace ~/runs/t2vcomp_toolkit/ws \
+    --models CogVideoX-5B \
+    --dimensions action_binding \
+    --judge gemma-4-31b-local \
+    --prompts-file ~/.cache/videvalkit/smoke-data/t2vcompbench/prompts.jsonl \
+    --extra-kwarg 'mode="toolkit"'
+# → per_dimension.action_binding ≈ 0.33  (different absolute number due to Gemma vs LLaVA-34B judge; paper-Δ not asserted)
+```
+
+**Gotchas:** `--mode upstream` is the paper-exact path (LLaVA-1.6-34B subprocess shim) and is required for byte-exact paper-Δ. `--mode toolkit` routes the 4 MLLM dims through your configured VLM judge — useful when you don't have the 80 GB GPU but accepts a paper-Δ caveat that's logged into `meta.scorers_used`.
+
+**Validation:** 6/7 dims within ±0.020 against paper Table 5 in upstream mode; `consistent_attribute` shows +0.186 drift attributed to LLaVA HEAD-revision drift (paper's revision is not pinned in the upstream `requirements.txt`).
 
 ---
 

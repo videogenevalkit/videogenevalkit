@@ -100,24 +100,62 @@ videvalkit doctor
 # checks: conda env, GPU, HF cache, smoke-data presence, judge endpoint reachability
 ```
 
-### 4. Run your first benchmark
+### 4. Run your first benchmark (worldjen on 3 Kling videos, ~5 min)
 
 ```bash
-videvalkit eval \
-  --bench worldjen \
-  --videos data/smoke/worldjen-kling-50 \
-  --workspace runs/first \
-  --judge gemma-4-31b-local
+# Fetch the worldjen smoke set (~600 MB: 50 Kling videos + prompts.jsonl + vqa.jsonl)
+videvalkit fetch-smoke-data --bench worldjen
+
+# Stage 3 of the 50 bundled videos
+mkdir -p ~/runs/worldjen/videos/Kling
+ls ~/.cache/videvalkit/smoke-data/worldjen/videos/fal-ai_kling-video_v2.6_pro_text-to-video/*.mp4 \
+  | head -3 | xargs -I{} ln -sf {} ~/runs/worldjen/videos/Kling/
+
+# Evaluate (Gemma-4-31B vLLM judge on localhost:8003; ~250 calls, ~5 min)
+videvalkit eval --bench worldjen \
+    --videos ~/runs/worldjen/videos \
+    --workspace ~/runs/worldjen/ws \
+    --models Kling \
+    --judge gemma-4-31b-local \
+    --aggregator phas
 ```
 
-End-to-end on smoke data in ~30 min on one GPU. Results land at `runs/first/results/summary/worldjen/Kling.json`.
+Expected at `~/runs/worldjen/ws/results/summary/worldjen/Kling.json`:
+
+```
+overall: ≈ 3.2 of 5 (unweighted PHAS on 3 prompts)
+per_category:
+  instruction_adherence  ≈ 3.78
+  aesthetic_quality      ≈ 3.50
+  motion_stability       ≈ 3.20
+  logic_physics          ≈ 2.58
+```
+
+The full 50-prompt calibrated PHAS for Kling-v2.6 reported in the paper is **4.12** (with learned per-dim weights). Our smoke uses 3 prompts + unweighted mean — values match the per-category ordering but differ in magnitude due to sample size + aggregator. Reproduce the calibrated headline by symlinking all 50 mp4s + using `--aggregator phas`.
 
 ### 5. Compare across benchmarks
 
 ```bash
-videvalkit aggregate --workspace runs/first
-# → runs/first/results/leaderboard/cross_benchmark.json
+videvalkit aggregate --workspace ~/runs/worldjen/ws
+# → ~/runs/worldjen/ws/results/leaderboard/cross_benchmark.json
 ```
+
+---
+
+## Running examples for all 6 benchmarks
+
+Worldjen (above) needs no local checkpoints. The other 5 each pull a specific checkpoint from `videogenevalkit/checkpoints` on HuggingFace. Full step-by-step recipes in [`docs/USER_MANUAL_en.md` §6](docs/USER_MANUAL_en.md).
+
+| # | Bench / dim | Scorer | Ckpt fetch (`videogenevalkit/checkpoints`) | Wallclock (3 vids) | GPU mem | Expected score |
+|---|---|---|---|---:|---:|---|
+| 1 | `worldjen` / 16 dims | Gemma-4-31B vLLM | — (no local ckpt) | ~5 min | 0 GB | overall ≈ 3.2 of 5 |
+| 2 | `vbench` / `subject_consistency` | DINO ViT-B/16 | `vbench/pretrained/dino_model/` (343 MB) | ~30 s | 2 GB | ≈ 0.92 |
+| 3 | `vbench2` / `Camera_Motion` | CoTracker3 (vendored) | `vbench2/third_party/cotracker/` (204 MB) | ~1 min | 4 GB | ≈ 0.67 |
+| 4 | `videobench` / `action_consistency` | Gemma-4-31B vLLM | — (no local ckpt) | ~2 min | 0 GB | ≈ 2.0 (raw 1-5) |
+| 5 | `worldscore` / `motion_magnitude` | SEA-RAFT | `worldscore/Tartan-C-T-TSKH-*` + `raft-things` (150 MB) | ~2 min | 4 GB | ≈ 56.4 (×100) |
+| 6 | `t2vcompbench` / `action_binding` (paper-mode) | LLaVA-1.6-34B | `hf-models/liuhaotian/llava-v1.6-34b/` (68 GB) | ~5 min after model load | 70 GB | raw 7.22 → norm 0.69 |
+
+Numbers above are from the integration test run on 2026-05-19 (3 sample videos each); run-to-run variance is typically ±0.05 for CV-based dims (DINO/CoTracker3/SEA-RAFT/GroundingDINO) and ±0.15 for VLM-judge dims (Gemma, LLaVA-34B) due to temperature-0.2 sampling. Full validation against published leaderboards in [`docs/TEST_MANUAL.md`](docs/TEST_MANUAL.md).
 
 ---
 

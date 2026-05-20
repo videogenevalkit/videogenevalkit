@@ -241,93 +241,275 @@ cat runs/first/results/summary/worldjen/Kling.json
 
 ## 6. 分基准操作指南
 
-下面每个小节给出规范的调用方式、所打分维度、默认评分器以及该基准的注意事项。素材来源：DEV_MANUAL 第 15.3.1 节（逐维依赖）与 TEST_MANUAL 第 4 节（验证结果）。
+下面每个小节都是完整的可复制粘贴运行示例：拉取 smoke 数据、从 HuggingFace `videogenevalkit/checkpoints` 取出对应 checkpoint、暂存 3-5 个样例视频、执行评测、看分数。所有示例都于 2026-05-19 完成了端到端验证；下文的预期分数即为当次运行（每基准 3 个样例视频）的实际结果。
+
+**6 个基准速查表：**
+
+| 节号 | Bench / 维度 | 评分器 | Checkpoint（来自 `videogenevalkit/checkpoints`） | 用时（3 视频） | 显存 | 预期分数 |
+|---|---|---|---|---:|---:|---|
+| 6.4 | `worldjen` / 16 维 | Gemma-4-31B vLLM | — 无本地权重 | ~5 min | 0 GB | overall ≈ 3.2 / 5 |
+| 6.1 | `vbench` / `subject_consistency` | DINO ViT-B/16 | `vbench/pretrained/dino_model/`（343 MB） | ~30 s | 2 GB | ≈ 0.92 |
+| 6.2 | `vbench2` / `Camera_Motion` | CoTracker3（内置） | `vbench2/third_party/cotracker/`（204 MB） | ~1 min | 4 GB | ≈ 0.67 |
+| 6.3 | `videobench` / `action_consistency` | Gemma-4-31B vLLM | — 无本地权重 | ~2 min | 0 GB | ≈ 2.0（1-5 原始分） |
+| 6.5 | `worldscore` / `motion_magnitude` | SEA-RAFT | `worldscore/Tartan-C-T-TSKH-*` + `raft-things`（150 MB） | ~2 min | 4 GB | ≈ 56.4（×100） |
+| 6.6 | `t2vcompbench` / `action_binding`（paper-mode） | LLaVA-1.6-34B | `hf-models/liuhaotian/llava-v1.6-34b/`（68 GB） | LLaVA 加载后 ~5 min | 70 GB | raw 7.22 → norm 0.69 |
+
+运行间方差：CV 类维度（DINO、CoTracker3、SEA-RAFT、GroundingDINO）约 ±0.05；VLM judge 类维度（Gemma-4-31B、LLaVA-1.6-34B）约 ±0.15（temperature=0.2 采样所致）。各维容忍带详见 [`TEST_MANUAL.md`](TEST_MANUAL.md) §3。
+
+各维定义与设计源材料：DEV_MANUAL 第 15.3.1 节（逐维依赖）与 TEST_MANUAL 第 4 节（验证结果）。
 
 ### 6.1 VBench v1
 
+**概览。** 16 维，7 quality + 9 semantic。所有维度都是纯 CV（无需 VLM judge）。各维默认评分器：`subject_consistency` 用 DINO ViT-B/16，`background_consistency` 用 CLIP ViT-B/32，`motion_smoothness` 用 AMT-S，`dynamic_degree` 用 RAFT，`imaging_quality` 用 MUSIQ，`object_class`/`color`/`multiple_objects`/`spatial_relationship` 用 GRiT，`human_action` 用 UMT，`scene` 用 tag2text，`appearance_style`/`temporal_style`/`overall_consistency` 用 ViCLIP，`aesthetic_quality` 用 LAION-aesthetic + CLIP ViT-L/14。聚合器为 `vbench_weighted`：`Total = 0.54*Quality + 0.46*Semantic`。
+
+**运行示例：在 3 个 HunyuanVideo 视频上跑 `subject_consistency`（~30 s, 2 GB 显存）**
+
 ```bash
+# 1. 取 smoke 视频 + DINO ViT-B/16 权重 + VBench prompt 注册表
+videvalkit fetch-smoke-data  --bench vbench
+videvalkit fetch-checkpoints --bench vbench
+
+# 2. 暂存 3 个 HunyuanVideo 样例视频
+mkdir -p ~/runs/vbench/videos/HunyuanVideo
+ls ~/.cache/videvalkit/smoke-data/vbench/videos/HunyuanVideo/*.mp4 \
+  | head -3 | xargs -I{} ln -sf {} ~/runs/vbench/videos/HunyuanVideo/
+
+# 3. 评测
 videvalkit eval --bench vbench \
-  --videos ~/.cache/videvalkit/smoke-data/vbench/videos/<model> \
-  --workspace runs/vbench
+    --videos ~/runs/vbench/videos \
+    --workspace ~/runs/vbench/ws \
+    --models HunyuanVideo \
+    --dimensions subject_consistency \
+    --prompts-file ~/.cache/videvalkit/smoke-data/vbench/prompts.jsonl
 ```
 
-16 维，7 quality + 9 semantic。所有维度都是纯 CV（无需 VLM judge）。各维默认评分器：`subject_consistency` 用 DINO ViT-B/16，`background_consistency` 用 CLIP ViT-B/32，`motion_smoothness` 用 AMT-S，`dynamic_degree` 用 RAFT，`imaging_quality` 用 MUSIQ，`object_class`/`color`/`multiple_objects`/`spatial_relationship` 用 GRiT，`human_action` 用 UMT，`scene` 用 tag2text，`appearance_style`/`temporal_style`/`overall_consistency` 用 ViCLIP，`aesthetic_quality` 用 LAION-aesthetic + CLIP ViT-L/14。聚合器为 `vbench_weighted`：`Total = 0.54*Quality + 0.46*Semantic`。
+**预期：** `per_dimension.subject_consistency ≈ 0.92`（每视频 8 帧的 DINO 相邻帧 cosine 求均值 × 3 视频）。运行间方差约 ±0.02。
 
-注意事项：`dynamic_degree` 是噪声最大的一维（RAFT 在 GPU 上的非确定性），该维容忍带需放宽至 +/-0.025。`human_action` 依赖 YOLOv5x 权重；请用 `checksums.json` 校验 SHA-256。对于依赖 prompt 的维度（`object_class`、`color`、`spatial_relationship`、`scene`、`human_action`、`multiple_objects`），自定义 prompt 必须携带 `auxiliary_info` 标签；若无，请使用自动标注器（见第 12 节）。
+**Checkpoint：** `vbench/pretrained/dino_model/dino_vitbase16_pretrain.pth`（343 MB）。等价的直接 API 调用：`huggingface_hub.snapshot_download(repo_id="videogenevalkit/checkpoints", repo_type="dataset", allow_patterns=["vbench/pretrained/dino_model/*", "vbench/VBench_full_info.json"])`。
 
-验证：HunyuanVideo 全集清扫，16/16 维都落在 +/-0.025 内；与 HF 排行榜的 mean |Delta| 为 0.012。
+**注意事项：** `dynamic_degree` 是噪声最大的一维（RAFT 在 GPU 上的非确定性），该维容忍带需放宽至 ±0.025。`human_action` 依赖 YOLOv5x 权重；请用 `checksums.json` 校验 SHA-256。对于依赖 prompt 的维度（`object_class`、`color`、`spatial_relationship`、`scene`、`human_action`、`multiple_objects`），自定义 prompt 必须携带 `auxiliary_info` 标签；若无，请使用自动标注器（见第 12 节）。
+
+**验证：** HunyuanVideo 全集清扫，16/16 维都落在 ±0.025 内；与 HF 排行榜的 mean |Δ| 为 0.012。
 
 ### 6.2 VBench-2.0
 
+**概览。** 18 维，分 5 个类别（Creativity、Commonsense、Controllability、Human Fidelity、Physics）。12 个推理维使用 LLaVA-Video-7B-Qwen2 作为 VLM 评分器；其中 5 维额外引入 Qwen2.5-7B-Instruct 作为 LLM judge。其余 6 维使用打包的 CV 栈：`Camera_Motion` 与 `Multi-View_Consistency` 用 CoTracker3；`Diversity` 用 VGG-19；`Human_Anatomy` 用打包的 ViTDetector；`Human_Identity` 用 ArcFace + RetinaFace；`Instance_Preservation` 用 Qwen2.5-VL-3B（经 ms-swift）。聚合器为 `vbench2_category`：5 个类别均值再算术平均得 `Overall`。
+
+**运行示例：在 3 个 HunyuanVideo 视频上跑 `Camera_Motion`（~1 min, 4 GB 显存）**
+
 ```bash
+# 1. 取 smoke 视频 + CoTracker3 权重 + VBench-2.0 prompt 注册表
+videvalkit fetch-smoke-data  --bench vbench2
+videvalkit fetch-checkpoints --bench vbench2
+
+# 2. 暂存 3 个 Camera_Motion 标签的 HunyuanVideo 视频
+mkdir -p ~/runs/vbench2/videos/HunyuanVideo/Camera_Motion
+ls ~/.cache/videvalkit/smoke-data/vbench2/videos/HunyuanVideo/Camera_Motion/*.mp4 \
+  | head -3 | xargs -I{} ln -sf {} ~/runs/vbench2/videos/HunyuanVideo/Camera_Motion/
+
+# 3. 评测
 videvalkit eval --bench vbench2 \
-  --videos ~/.cache/videvalkit/smoke-data/vbench2/videos/<model> \
-  --workspace runs/vbench2 \
-  --judge local-llava-video-7b
+    --videos ~/runs/vbench2/videos \
+    --workspace ~/runs/vbench2/ws \
+    --models HunyuanVideo \
+    --dimensions Camera_Motion \
+    --extra-kwarg 'mode="vbench2_standard"'
 ```
 
-18 维，分 5 个类别（Creativity、Commonsense、Controllability、Human Fidelity、Physics）。12 个推理维使用 LLaVA-Video-7B-Qwen2 作为 VLM 评分器；其中 5 维额外引入 Qwen2.5-7B-Instruct 作为 LLM judge。其余 6 维使用打包的 CV 栈：`camera_motion` 与 `multi_view_consistency` 用 CoTracker3；`diversity` 用 VGG-19；`human_anatomy` 用打包的 ViTDetector；`human_identity` 用 ArcFace + RetinaFace；`instance_preservation` 用 Qwen2.5-VL-3B（经 ms-swift）。聚合器为 `vbench2_category`：5 个类别均值再算术平均得 `Overall`。
+**预期：** `per_dimension.Camera_Motion ≈ 0.67`（每个视频的 0/1 二值判定再求均值，3 个视频可能落在 0、0.33、0.67、1.0）。CoTracker3 推理无 temperature，逐次结果一致。
 
-注意事项：`Human_Anatomy` 与 `Human_Identity` **不可**替换为其他 VLM（打包的检测器）。`Diversity` 至少需要每条 prompt 2 个 seed。HunyuanVideo 全集清扫的 mean |Delta| 为 0.0055（18/18 维），前提是已应用 cv2 顺序读帧修复与 `-1` 哨兵过滤。默认 judge 为 `local-llava-video-7b`；可通过 `--scorer-vlm gemma-4-31b-local` 替换为更强的推理模型（paper-Delta 容忍带会变宽，参见第 7 节）。
+**Checkpoint：** `vbench2/third_party/cotracker/cotracker2.pth`（204 MB）；等价的 `allow_patterns=["vbench2/third_party/cotracker/*", "vbench2/VBench2_full_info.json"]`。
+
+**注意事项：** `Human_Anatomy` 与 `Human_Identity` **不可**替换为其他 VLM（打包的检测器）。`Diversity` 至少需要每条 prompt 2 个 seed。HunyuanVideo 全集清扫的 mean |Δ| 为 0.0055（18/18 维），前提是已应用 cv2 顺序读帧修复与 `-1` 哨兵过滤。默认 judge 为 `local-llava-video-7b`；可通过 `--scorer-vlm gemma-4-31b-local` 替换为更强的推理模型（paper-Δ 容忍带会变宽，参见第 7 节）。
+
+**验证：** HunyuanVideo 全集清扫，18/18 维都落在 ±0.025 内；与 HF 排行榜（2025-03-28 行）的 mean |Δ| 为 0.0055。
 
 ### 6.3 Video-Bench
 
+**概览。** 9 维：4 维 alignment（`video_text_consistency`、`object_class_consistency`、`color_consistency`、`action_consistency`、`scene_consistency`），1-3 分制；4 维 quality（`imaging_quality`、`aesthetic_quality`、`temporal_consistency`、`motion_effects`），1-5 分制。9 维共用**同一个** VLM judge——这是按模型数计算最简单的基准。论文使用 GPT-4o（`gpt-4o-2024-08-06`）；工具集默认注册的是 `gpt-4o-2024-11-20`。聚合器为 `videobench_per_dim`：在链式查询（chain-of-query）响应上做算术平均。
+
+**运行示例：在 3 个 CogVideoX-5B 视频上跑 `action_consistency`（~2 min，Gemma judge，无本地权重）**
+
 ```bash
+# 1. 取 smoke 视频 + prompts.jsonl（无 checkpoint —— VLM judge 负责评分）
+videvalkit fetch-smoke-data --bench videobench
+
+# 2. 暂存 3 个 action_consistency 标签的视频
+mkdir -p ~/runs/videobench/videos/cogvideox5b
+ls ~/.cache/videvalkit/smoke-data/videobench/videos/cogvideox5b/action_consistency/*.mp4 \
+  | head -3 | xargs -I{} ln -sf {} ~/runs/videobench/videos/cogvideox5b/
+
+# 3. 评测（Gemma-4-31B vLLM judge 在 localhost:8003）
 videvalkit eval --bench videobench \
-  --videos ~/.cache/videvalkit/smoke-data/videobench/videos/<model> \
-  --workspace runs/videobench \
-  --judge gpt-4o
+    --videos ~/runs/videobench/videos \
+    --workspace ~/runs/videobench/ws \
+    --models cogvideox5b \
+    --judge gemma-4-31b-local \
+    --dimensions action_consistency \
+    --prompts-file ~/.cache/videvalkit/smoke-data/videobench/prompts.jsonl
 ```
 
-9 维：4 维 alignment（`video_text_consistency`、`object_class_consistency`、`color_consistency`、`action_consistency`、`scene_consistency`），1-3 分制；4 维 quality（`imaging_quality`、`aesthetic_quality`、`temporal_consistency`、`motion_effects`），1-5 分制。9 维共用**同一个** VLM judge——这是按模型数计算最简单的基准。论文使用 GPT-4o（`gpt-4o-2024-08-06`）；工具集默认注册的是 `gpt-4o-2024-11-20`。聚合器为 `videobench_per_dim`：在链式查询（chain-of-query）响应上做算术平均。
+**预期：** `per_dimension.action_consistency ≈ 2.0`（原始 1-5 分）。Gemma temperature=0.2 采样导致逐次方差约 ±0.5。
 
-注意事项：GPT-4o 快照存在漂移；如要复现论文，请新建 `gpt-4o-2024-08-06` 条目（见第 7 节）并使用 `--judge gpt-4o-2024-08-06`。用 Gemma 替代 GPT-4o 会在 1-5 分制下让动态质量维度漂移 +/-2.0 点（`temporal_consistency` 与 `motion_effects` 在 Gemma 下呈双峰分布）。静态与对齐维度在 Gemma 下与论文相差不超过 +/-0.2。
+**Checkpoint：** 无 —— 评分器就是 VLM endpoint。改用 GPT-4o：`--judge gpt-4o`，并设置 `OPENAI_API_KEY`；如需 paper-exact 的 `gpt-4o-2024-08-06` 快照，请在 `~/.config/videvalkit/judges.yaml` 中注册（参见第 7 节）。
+
+**注意事项：** GPT-4o 快照存在漂移；如要复现论文，请新建 `gpt-4o-2024-08-06` 条目并使用 `--judge gpt-4o-2024-08-06`。用 Gemma 替代 GPT-4o 会在 1-5 分制下让动态质量维度漂移 ±2.0 点（`temporal_consistency` 与 `motion_effects` 在 Gemma 下呈双峰分布）。静态与对齐维度在 Gemma 下与论文相差不超过 ±0.2。
 
 ### 6.4 WorldJen
 
+**概览。** 16 维，分 4 个宏类（motion_stability、logic_physics、instruction_adherence、aesthetic_quality）。两阶段：阶段 A 用 LLM 生成 VQA 问题（默认 `qwen3-32b-local`，端口 8004）；阶段 B 用 VLM 作答（默认 `gemma-4-31b-local`，端口 8003）。聚合器为 `phas`：分维均值的加权和减去方差项，权重为论文校准值。
+
+**运行示例：在 3 个 Kling 视频上跑全部 16 维（~5 min，Gemma judge，无本地权重）**
+
 ```bash
+# 1. 取 worldjen smoke（50 个 Kling 视频 + prompts.jsonl + vqa.jsonl）
+videvalkit fetch-smoke-data --bench worldjen
+
+# 2. 暂存 3 个 Kling 视频
+mkdir -p ~/runs/worldjen/videos/Kling
+ls ~/.cache/videvalkit/smoke-data/worldjen/videos/fal-ai_kling-video_v2.6_pro_text-to-video/*.mp4 \
+  | head -3 | xargs -I{} ln -sf {} ~/runs/worldjen/videos/Kling/
+
+# 3. 评测（约 250 次 Gemma 调用：阶段 A VQA 生成 + 阶段 B 作答）
 videvalkit eval --bench worldjen \
-  --videos ~/.cache/videvalkit/smoke-data/worldjen/videos/<model> \
-  --workspace runs/worldjen \
-  --judge gemma-4-31b-local
+    --videos ~/runs/worldjen/videos \
+    --workspace ~/runs/worldjen/ws \
+    --models Kling \
+    --judge gemma-4-31b-local \
+    --aggregator phas
 ```
 
-16 维，分 4 个宏类（motion_stability、logic_physics、instruction_adherence、aesthetic_quality）。两阶段：阶段 A 用 LLM 生成 VQA 问题（默认 `qwen3-32b-local`，端口 8004）；阶段 B 用 VLM 作答（默认 `gemma-4-31b-local`，端口 8003）。聚合器为 `phas`：分维均值的加权和减去方差项，权重为论文校准值。
+**预期：** `~/runs/worldjen/ws/results/summary/worldjen/Kling.json`：
 
-注意事项：若工作区已存在 `vqa_questions_50prompts.jsonl`，阶段 A 会被静默跳过——日志中 "judge_llm not given; defaulting to judge for VQA gen" 这一行在文件存在性检查之前就会无条件输出，不能据此判断阶段 A 是否真的跑了。请查看 `<ws>/api_logs/calls/Qwen/` 以确认。对 Gemma 请保持 `max_concurrency=2`，避免 broken-pipe 报错洪流；阶段 A 在 Qwen 上很轻量，可与重负载的阶段 B 并行不冲突。
+```
+overall ≈ 3.2 / 5  （在 3 条 prompt 上对 16 维均值再求均值）
+per_category:
+  instruction_adherence  ≈ 3.78    (Kling 表现最强)
+  aesthetic_quality      ≈ 3.50
+  motion_stability       ≈ 3.20
+  logic_physics          ≈ 2.58    (Kling 表现最弱)
+```
+
+逐维明细（3 条样本 prompt 的均值）：
+
+| 维度 | 分数 | 维度 | 分数 |
+|---|---:|---|---:|
+| `semantic_adherence`     | 4.47 | `composition_framing` | 3.60 |
+| `semantic_drift`         | 4.07 | `lighting_volumetric` | 3.60 |
+| `color_harmony`          | 3.83 | `subject_consistency` | 3.43 |
+| `scene_consistency`      | 3.73 | `structural_gestalt`  | 2.97 |
+| `temporal_flickering`    | 3.73 | `spatial_relationship`| 2.80 |
+| `human_fidelity`         | 2.70 | `motion_smoothness`   | 2.60 |
+| `inertial_consistency`   | 2.50 | `dynamic_degree`      | 2.57 |
+| `physical_mechanics`     | 2.57 | `object_permanence`   | 2.50 |
+
+**Checkpoint：** 无 —— 阶段 A（LLM）与阶段 B（VLM）皆为远端 endpoint。默认 `gemma-4-31b-local` 即 vLLM 在 `http://localhost:8003/v1` 提供的 `google/gemma-4-31b-it`。可替换为 `--judge gemini-3-flash`（托管 API，需 `GOOGLE_API_KEY`）以匹配论文使用的 Gemini 配置。
+
+**论文 calibrated 头条分。** 论文公布的 Kling-v2.6 在全 50 prompt 头条切片上的 PHAS 为 **4.12**，使用 *校准后* 的逐维权重（基于人工标注的非负 ridge 回归）。要复现，请软链全部 50 个 mp4 至 videos 目录并重跑 `--aggregator phas`（校准权重会自动加载）。
+
+**注意事项：** 若工作区已存在 `vqa_questions_50prompts.jsonl`，阶段 A 会被静默跳过——日志中 "judge_llm not given; defaulting to judge for VQA gen" 这一行在文件存在性检查之前就会无条件输出，不能据此判断阶段 A 是否真的跑了。请查看 `<ws>/api_logs/calls/Qwen/` 以确认。对 Gemma 请保持 `max_concurrency=2`，避免 broken-pipe 报错洪流；阶段 A 在 Qwen 上很轻量，可与重负载的阶段 B 并行不冲突。
 
 ### 6.5 WorldScore
 
+**概览。** 10 维：7 静态（`camera_control`、`object_control`、`content_alignment`、`3d_consistency`、`photometric_consistency`、`style_consistency`、`subjective_quality`）+ 3 动态（`motion_accuracy`、`motion_magnitude`、`motion_smoothness`）。全部 CV 评分，无需 VLM judge。技术栈：DROID-SLAM（相机 + 3D）、SEA-RAFT（光流 + 光度一致性）、VFIMamba（基于插帧的 motion smoothness）、SAM2（motion-accuracy 掩膜传播）、GroundingDINO + SAM-H（目标检测）、VGG-19（风格 Gram）、LAION + CLIP-IQA+（主观质量）、torchmetrics CLIPScore（内容对齐）。头条指标：`WorldScore-Static`（7 维静态分均值 × 100）与 `WorldScore-Dynamic`（10 维均值 × 100）。
+
+**运行示例：在 3 个 CogVideoX-5B 动态视频上跑 `motion_magnitude`（~2 min, 4 GB 显存）**
+
+WorldScore 的上游代码以相对路径定位权重；`fetch-checkpoints` 后我们将权重软链到上游期望的目录。
+
 ```bash
+# 1. 取 smoke 视频 + 上游仓库 + SEA-RAFT 权重
+videvalkit fetch-smoke-data  --bench worldscore
+videvalkit fetch-upstream    --bench worldscore   # git clone WorldScore 仓库
+videvalkit fetch-checkpoints --bench worldscore
+
+# 2. 把权重软链到上游期望的位置（一次性）
+WS_ROOT=~/.cache/videvalkit/upstream/WorldScore
+mkdir -p $WS_ROOT/worldscore/benchmark/metrics/checkpoints
+ln -sf ~/.cache/videvalkit/checkpoints/worldscore/*.pth \
+       $WS_ROOT/worldscore/benchmark/metrics/checkpoints/
+ln -sf ~/.cache/videvalkit/checkpoints/worldscore/*.pkl \
+       $WS_ROOT/worldscore/benchmark/metrics/checkpoints/
+export VIDEVALKIT_WORLDSCORE_ROOT=$WS_ROOT
+
+# 3. 暂存 3 个动态视频
+mkdir -p ~/runs/worldscore/videos/cogvideox-5b/dynamic
+ls ~/.cache/videvalkit/smoke-data/worldscore/videos/cogvideox-5b/dynamic/*.mp4 \
+  | head -3 | xargs -I{} ln -sf {} ~/runs/worldscore/videos/cogvideox-5b/dynamic/
+
+# 4. 评测（SEA-RAFT 在每视频 49 帧上算光流，取 magnitude 中位数）
 videvalkit eval --bench worldscore \
-  --videos ~/.cache/videvalkit/smoke-data/worldscore/videos/<model> \
-  --workspace runs/worldscore
+    --videos ~/runs/worldscore/videos \
+    --workspace ~/runs/worldscore/ws \
+    --models cogvideox-5b \
+    --dimensions motion_magnitude \
+    --prompts-file ~/.cache/videvalkit/smoke-data/worldscore/prompts/dynamic.jsonl
 ```
 
-10 维：7 静态（`camera_control`、`object_control`、`content_alignment`、`3d_consistency`、`photometric_consistency`、`style_consistency`、`subjective_quality`）+ 3 动态（`motion_accuracy`、`motion_magnitude`、`motion_smoothness`）。全部 CV 评分，无需 VLM judge。技术栈：DROID-SLAM（相机 + 3D）、SEA-RAFT（光流 + 光度一致性）、VFIMamba（基于插帧的 motion smoothness）、SAM2（motion-accuracy 掩膜传播）、GroundingDINO + SAM-H（目标检测）、VGG-19（风格 Gram）、LAION + CLIP-IQA+（主观质量）、torchmetrics CLIPScore（内容对齐）。头条指标：`WorldScore-Static`（7 维静态分均值 × 100）与 `WorldScore-Dynamic`（10 维均值 × 100）。
+**预期：** `per_dimension.motion_magnitude ≈ 56.4`（上游约定的 ×100 量纲）。仅跑这一维时，头条 `WorldScore-Dynamic ≈ 56.4`。SEA-RAFT 无 temperature，逐次结果一致。
 
-注意事项：`style_consistency` 对比的是 HF 数据集中提供的 `input_image.png`，**不是**生成视频的第 0 帧；对 T2V 模型而言，参考图由上游 T2I 流水线在相同场景 prompt 上生成。评测前请先跑一次 `runners/extract_refs.py` 以物化逐条目（per-entry）参考图。请把 torch 钉在 `2.3.1+cu121`；安装 `mamba_ssm` 时**不要**让 pip 自动升级 torch（升级会破坏 lietorch/droid_backends/sam2/pyiqa）。适配器内置纯 PyTorch 的 `mamba_ssm.selective_scan` shim，无需重编译 CUDA 扩展即可运行 VFIMamba。
+**Checkpoint：**
+- `worldscore/Tartan-C-T-TSKH-spring540x960-M.pth`（130 MB）—— SEA-RAFT 光流
+- `worldscore/raft-things.pth`（20 MB）—— DROID-SLAM 中使用的 RAFT
+- 等价：`allow_patterns=["worldscore/Tartan*", "worldscore/raft-things*"]`
+
+若要跑全部 10 维，还需：`groundingdino_swint_ogc.pth`、`sam_vit_h_4b8939.pth`、`sam2.1_hiera_large.pt`、`VFIMamba.pkl`、`droid.pth`、`sac+logos+ava1-l14-linearMSE.pth`（直接 `--bench worldscore` 不加 `allow_patterns` 即可获取全部，约 6.3 GB）。
+
+**注意事项：** `style_consistency` 对比的是 HF 数据集中提供的 `input_image.png`，**不是**生成视频的第 0 帧；对 T2V 模型而言，参考图由上游 T2I 流水线在相同场景 prompt 上生成。评测前请先跑一次 `runners/extract_refs.py` 以物化逐条目（per-entry）参考图。请把 torch 钉在 `2.3.1+cu121`；安装 `mamba_ssm` 时**不要**让 pip 自动升级 torch（升级会破坏 lietorch/droid_backends/sam2/pyiqa）。适配器内置纯 PyTorch 的 `mamba_ssm.selective_scan` shim，无需重编译 CUDA 扩展即可运行 VFIMamba。
 
 ### 6.6 T2V-CompBench
 
-```bash
-# Paper-exact 模式（LLaVA-1.6-34B 子进程 shim，要求 >=80 GB GPU）
-videvalkit eval --bench t2vcompbench \
-  --videos ~/.cache/videvalkit/smoke-data/t2vcompbench/videos/<model> \
-  --workspace runs/t2vcomp_upstream \
-  --mode upstream
+**概览。** 7 维组合性维度。4 维 MLLM（`consistent_attribute`、`action_binding`、`object_interactions`、`dynamic_attribute`）使用 LLaVA-1.6-34B，temperature=0，`chatml_direct` 对话模板，3 seed 取均值。3 维 CV：`generative_numeracy`（GroundingDINO + 计数）、`spatial_relationships`（GD + Depth-Anything V1，2D+3D 联合）、`motion_binding`（GD + SAM-H + DOT = cotracker2 + RAFT estimator + RAFT refiner）。聚合器：7 维无权均值。
 
-# Toolkit 模式（可配置 VLM judge，可在较小 GPU 上运行）
+**运行示例 A —— `action_binding` paper-mode，3 个 CogVideoX-5B 视频（LLaVA 加载后 ~5 min，需 ≥80 GB 显存）**
+
+```bash
+# 1. 取 smoke 视频 + t2vcompbench CV 权重 + LLaVA-1.6-34B
+videvalkit fetch-smoke-data  --bench t2vcompbench
+videvalkit fetch-checkpoints --bench t2vcompbench   # GroundingDINO + SAM-H + Depth-Anything + DOT（~4 GB）
+videvalkit fetch-checkpoints --bench hf-models      # LLaVA-1.6-34B + Qwen2.5-7B + LLaVA-Video-7B + CLIP + DepthAnything（~95 GB）
+
+# 2. clone T2V-CompBench 上游仓库（包含 LLaVA 评测脚本）
+videvalkit fetch-upstream --bench t2vcompbench
+
+# 3. 暂存 3 个 action_binding 标签的视频
+mkdir -p ~/runs/t2vcomp_paper/videos/CogVideoX-5B
+ls ~/.cache/videvalkit/smoke-data/t2vcompbench/videos/CogVideoX-5B/action_binding_*.mp4 \
+  | head -3 | xargs -I{} ln -sf {} ~/runs/t2vcomp_paper/videos/CogVideoX-5B/
+
+# 4. 评测（LLaVA-1.6-34B temperature=0，3 seed × 3 视频 = 9 次推理，~5 min）
 videvalkit eval --bench t2vcompbench \
-  --videos ~/.cache/videvalkit/smoke-data/t2vcompbench/videos/<model> \
-  --workspace runs/t2vcomp_toolkit \
-  --mode toolkit \
-  --judge gemma-4-31b-local
+    --videos ~/runs/t2vcomp_paper/videos \
+    --workspace ~/runs/t2vcomp_paper/ws \
+    --models CogVideoX-5B \
+    --dimensions action_binding \
+    --prompts-file ~/.cache/videvalkit/smoke-data/t2vcompbench/prompts.jsonl \
+    --extra-kwarg 'mode="upstream"'
 ```
 
-7 维组合性维度。4 维 MLLM（`consistent_attribute`、`action_binding`、`object_interactions`、`dynamic_attribute`）使用 LLaVA-1.6-34B，temperature=0，chatml_direct 对话模板，3 seed 取均值。3 维 CV：`generative_numeracy`（GD + 计数）、`spatial_relationships`（GD + Depth-Anything V1，2D+3D 联合）、`motion_binding`（GD + SAM-H + DOT = cotracker2 + RAFT estimator + RAFT refiner）。聚合器：7 维无权均值。
+**预期：** `per_dimension.action_binding ≈ 7.22`（原始 1-10 分），经上游 `(raw - 1) / 9` 公式归一化 = **0.691**。论文 Table 2 中 CogVideoX-5B 在全 200 视频集的分数为 0.533；我们 3 个视频的 smoke 在 ±0.15 采样带内，符合预期。
 
-注意事项：`--mode upstream` 是 paper-exact 路径（LLaVA-1.6-34B 子进程 shim），是按字节复现论文 Delta 所必需。`--mode toolkit` 将 4 维 MLLM 路由到你配置的 VLM judge——在 GPU 显存不足 80 GB 时有用，但会接受被记录到 `meta.scorers_used` 的 paper-Delta 警告。验证：在 upstream 模式下，7 维中 6 维与论文 Table 5 相差 +/-0.020 内；`consistent_attribute` 出现 +0.186 漂移，归因于 LLaVA HEAD 修订漂移（论文的 requirements.txt 未钉住 revision）。
+**Checkpoint：** `hf-models/liuhaotian/llava-v1.6-34b/`（15 个 safetensors，共 68 GB）；等价 `allow_patterns=["hf-models/liuhaotian/llava-v1.6-34b/*"]`。
+
+**运行示例 B —— `action_binding` toolkit-mode（不需要 LLaVA-34B，可在小显存 GPU 上运行）**
+
+若没有 80 GB 显存，可切换到 `mode="toolkit"`，将 MLLM 维度路由到你配置的 VLM judge：
+
+```bash
+videvalkit eval --bench t2vcompbench \
+    --videos ~/runs/t2vcomp_toolkit/videos \
+    --workspace ~/runs/t2vcomp_toolkit/ws \
+    --models CogVideoX-5B \
+    --dimensions action_binding \
+    --judge gemma-4-31b-local \
+    --prompts-file ~/.cache/videvalkit/smoke-data/t2vcompbench/prompts.jsonl \
+    --extra-kwarg 'mode="toolkit"'
+# → per_dimension.action_binding ≈ 0.33（绝对值不同，因评分器从 LLaVA-34B 换成了 Gemma；此时不再保证 paper-Δ）
+```
+
+**注意事项：** `--mode upstream` 是 paper-exact 路径（LLaVA-1.6-34B 子进程 shim），是按字节复现论文 Δ 所必需。`--mode toolkit` 将 4 维 MLLM 路由到你配置的 VLM judge——在 GPU 显存不足 80 GB 时有用，但会接受被记录到 `meta.scorers_used` 的 paper-Δ 警告。
+
+**验证：** 在 upstream 模式下，7 维中 6 维与论文 Table 5 相差 ±0.020 内；`consistent_attribute` 出现 +0.186 漂移，归因于 LLaVA HEAD 修订漂移（论文的 requirements.txt 未钉住 revision）。
 
 ---
 
