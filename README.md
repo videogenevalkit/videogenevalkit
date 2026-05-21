@@ -44,7 +44,7 @@ Full per-dim tables: see [`docs/TEST_MANUAL.md`](docs/TEST_MANUAL.md).
 | `worldjen` | [WorldJen](https://github.com/moonmath-ai/WorldJen-benchmarking-subsystem) | 16 dims grouped into motion_stability / logic_physics / instruction_adherence / aesthetic; PHAS aggregator |
 | `worldscore` | [WorldScore](https://github.com/yhw-yhw/WorldScore) | 10 dims: 7 static (CLIP/DROID-SLAM/SAM/GD/IQA) + 3 dynamic (RAFT/VFIMamba/Motion-Acc) |
 | `t2vcompbench` | [T2V-CompBench V2](https://github.com/KaiyueSun98/T2V-CompBench/tree/V2) | 7 compositional dims; LLaVA-1.6-34B MLLM + GD-SwinT-OGC + SAM-H + Depth-Anything V1 + DOT |
-| `semantics_axis` | in-house (Semantics Axis Eval) | 21 prompt-following axes — entity / spatial / event / cinematic / modifier — + holistic `overall`; VLM-judge, 1-5, no checkpoints |
+| `semantics_axis` | in-house (Semantics Axis Eval) | 21 prompt-following axes — entity / spatial / event / cinematic / modifier — + holistic `overall`; VLM-judge, 1-5 |
 
 Plus 3 supplementary stubs landing (Physics-IQ, VBench++, V-ReasonBench).
 
