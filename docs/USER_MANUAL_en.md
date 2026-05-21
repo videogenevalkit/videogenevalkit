@@ -621,6 +621,34 @@ videvalkit eval --bench t2vcompbench \
 
 **Validation:** 6/7 dims within ±0.020 against paper Table 5 in upstream mode; `consistent_attribute` shows +0.186 drift attributed to LLaVA HEAD-revision drift (paper's revision is not pinned in the upstream `requirements.txt`).
 
+### 6.7 Semantics Axis
+
+**Overview.** `semantics_axis` is an in-house VLM-judge **prompt-following** evaluation — 21 narrow axes plus a holistic `overall`, grouped: entity (9: `object_class`, `multiple_objects`, `color`, `material`, `scene`, `style`, `pose`, `emotion`, `text_ocr`), spatial (1: `spatial_relationship`), event (7: `action`, `motion_order`, `dynamic_attribute`, `dynamic_spatial_relationship`, `human_interaction`, `complex_plot`, `complex_landscape`), cinematic (2: `camera_motion`, `shot_composition`), modifier (1: `temporal_modifier`). Each axis is a structured 5-step-CoT system prompt that scores one video **1-5** on that single axis; output is JSON-only. There are **no local checkpoints** — every axis is scored through a VLM judge (default `gemma-4-31b-local`). The aggregator reports per-axis means, per-group means (`meta.per_group`), and a headline mean.
+
+**Running example: all 21 axes on 3 pangu3 videos (~5 min, Gemma judge, no ckpt)**
+
+```bash
+# 1. fetch the semantics_axis sample (9 prompts x 3 models, covers all 21 axes)
+videvalkit fetch-smoke-data --bench semantics_axis
+
+# 2. stage 3 pangu3 videos
+mkdir -p ~/runs/semaxis/videos/pangu3
+ls ~/.cache/videvalkit/smoke-data/semantics_axis/videos/pangu3/*.mp4 \
+  | head -3 | xargs -I{} ln -sf {} ~/runs/semaxis/videos/pangu3/
+
+# 3. evaluate (omit --dimensions to run every in-scope axis per prompt)
+videvalkit eval --bench semantics_axis \
+    --videos ~/runs/semaxis/videos \
+    --workspace ~/runs/semaxis/ws \
+    --models pangu3 \
+    --judge gemma-4-31b-local \
+    --prompts-file ~/.cache/videvalkit/smoke-data/semantics_axis/prompts.jsonl
+```
+
+**Expected:** `per_dimension` carries a 1-5 score per axis the sample's prompts cover; `meta.per_group` reports the 5 group means + `overall`; the headline is the mean across axes. On the 9-video pangu3 sample the headline lands ≈ 4.3.
+
+**Notes:** Each prompt's `dimensions` list is the curated set of axes in scope for that prompt — a video is only scored on axes its prompt actually exercises. Axes have a built-in **scope guard**: a static/dynamic mismatch returns `不适用=true` (recorded in `meta`). The axis prompts are Chinese-rubric with Chinese JSON keys — the parser is language-agnostic (keys on `score_5`). `qwen3-vl-32b-local` is a strong alternative judge; `gemini-3-flash` also works.
+
 ---
 
 ## 7. Configuring scorers (VLM/LLM judges)

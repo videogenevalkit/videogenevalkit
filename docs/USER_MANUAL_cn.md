@@ -623,6 +623,34 @@ videvalkit eval --bench t2vcompbench \
 
 **验证：** 在 upstream 模式下，7 维中 6 维与论文 Table 5 相差 ±0.020 内；`consistent_attribute` 出现 +0.186 漂移，归因于 LLaVA HEAD 修订漂移（论文的 requirements.txt 未钉住 revision）。
 
+### 6.7 Semantics Axis
+
+**概览。** `semantics_axis` 是内部的 VLM-judge **prompt-following（指令遵循）**评测 —— 21 个细分 axis 外加一个整体 `overall`，分组为：entity（9：`object_class`、`multiple_objects`、`color`、`material`、`scene`、`style`、`pose`、`emotion`、`text_ocr`）、spatial（1：`spatial_relationship`）、event（7：`action`、`motion_order`、`dynamic_attribute`、`dynamic_spatial_relationship`、`human_interaction`、`complex_plot`、`complex_landscape`）、cinematic（2：`camera_motion`、`shot_composition`）、modifier（1：`temporal_modifier`）。每个 axis 是一份结构化的 5 步 CoT system prompt，对单个视频在该 axis 上打 **1-5** 分；输出为纯 JSON。**无本地 checkpoint** —— 每个 axis 都通过 VLM judge 打分（默认 `gemma-4-31b-local`）。聚合器报告逐 axis 均值、逐组均值（`meta.per_group`）以及头条均值。
+
+**运行示例：3 个 pangu3 视频上跑全部 21 个 axis（~5 min，Gemma judge，无 ckpt）**
+
+```bash
+# 1. 取 semantics_axis 样本（9 prompt × 3 模型，覆盖全部 21 个 axis）
+videvalkit fetch-smoke-data --bench semantics_axis
+
+# 2. 暂存 3 个 pangu3 视频
+mkdir -p ~/runs/semaxis/videos/pangu3
+ls ~/.cache/videvalkit/smoke-data/semantics_axis/videos/pangu3/*.mp4 \
+  | head -3 | xargs -I{} ln -sf {} ~/runs/semaxis/videos/pangu3/
+
+# 3. 评测（省略 --dimensions 即对每条 prompt 跑其全部在范围内的 axis）
+videvalkit eval --bench semantics_axis \
+    --videos ~/runs/semaxis/videos \
+    --workspace ~/runs/semaxis/ws \
+    --models pangu3 \
+    --judge gemma-4-31b-local \
+    --prompts-file ~/.cache/videvalkit/smoke-data/semantics_axis/prompts.jsonl
+```
+
+**预期：** `per_dimension` 给出样本 prompt 覆盖到的每个 axis 的 1-5 分；`meta.per_group` 报告 5 个组的均值 + `overall`；头条分为各 axis 的均值。在 9 视频的 pangu3 样本上头条分约 ≈ 4.3。
+
+**注意事项：** 每条 prompt 的 `dimensions` 列表是该 prompt 在范围内的 axis 集合 —— 视频只在其 prompt 实际涉及的 axis 上打分。各 axis 内置 **scope guard**：静态/动态不匹配时返回 `不适用=true`（记录在 `meta` 中）。axis prompt 是中文 rubric、中文 JSON key —— 解析器与语言无关（只取 `score_5`）。`qwen3-vl-32b-local` 是更强的备选 judge；`gemini-3-flash` 亦可。
+
 ---
 
 ## 7. 配置评分器（VLM/LLM judges）

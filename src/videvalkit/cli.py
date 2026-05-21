@@ -200,7 +200,8 @@ def _default_cache_root() -> Path:
 @main.command("fetch-smoke-data")
 @click.option("--bench", multiple=True,
               type=click.Choice(["vbench", "vbench2", "videobench",
-                                 "worldjen", "worldscore", "t2vcompbench", "all"]),
+                                 "worldjen", "worldscore", "t2vcompbench",
+                                 "semantics_axis", "all"]),
               default=("all",),
               help="One or more benchmarks to fetch. 'all' = everything (~3 GB).")
 @click.option("--dest", type=click.Path(path_type=Path), default=None,
@@ -210,7 +211,8 @@ def fetch_smoke_data_cmd(bench: tuple[str, ...], dest: Path | None, dry_run: boo
     """Pull smoke-test video samples + prompts from videogenevalkit/smoke-data on HF."""
     benches = set(bench)
     if "all" in benches:
-        benches = {"vbench", "vbench2", "videobench", "worldjen", "worldscore", "t2vcompbench"}
+        benches = {"vbench", "vbench2", "videobench", "worldjen", "worldscore",
+                   "t2vcompbench", "semantics_axis"}
     dest = dest or (_default_cache_root() / "smoke-data")
     allow = []
     for b in sorted(benches):
