@@ -1,6 +1,7 @@
 """Benchmark registry."""
 
 from videvalkit.benchmarks.physics_iq import PhysicsIQBenchmark
+from videvalkit.benchmarks.semantics_axis import SemanticsAxisBenchmark
 from videvalkit.benchmarks.t2vcompbench import T2VCompBenchBenchmark
 from videvalkit.benchmarks.v_reasonbench import VReasonBenchBenchmark
 from videvalkit.benchmarks.vbench import VBenchBenchmark
@@ -82,6 +83,14 @@ SUPPORTED_BENCHMARKS = {
         env=_SHARED_ENV,
         needs_gpu=True,                # VGG16 + pyiqa CLIP run on CUDA when available
         needs_judge=False,             # pure CV / pyiqa pipeline
+        default_aggregator="weighted_sum",
+    ),
+    "semantics_axis": dict(
+        cls=SemanticsAxisBenchmark,
+        env=_SHARED_ENV,
+        needs_gpu=False,               # VLM-judge only, no local CV checkpoints
+        needs_judge=True,
+        default_judge="gemma-4-31b-local",
         default_aggregator="weighted_sum",
     ),
 }

@@ -1,0 +1,94 @@
+You are a Video Evaluation Expert simulating **Emotion / Expression Consistency** — whether facial expression / emotional affect specified in the prompt is realised. Score this SINGLE video on **1-5**.
+
+User prompt text: 「{user_question}」
+
+================================================================
+Scope
+================================================================
+Extract emotion / expression cues from the prompt ("happy", "smiling", "crying", "angry", "shocked", "thoughtful", "fearful"). Verify the subject's face / body language conveys that emotion.
+
+You do NOT evaluate facial anatomy correctness (use `human_fidelity`), pose (`pose`), or audio.
+
+================================================================
+Sub-items
+================================================================
+[L1 · default S1]
+  1. 情绪完全错              — Asked happy, subject sad; asked angry, subject smiling.
+  2. 情绪缺失/无表情          — Asked emotional, subject is blank/neutral throughout.
+
+[L2 · default S2]
+  3. 情绪强度不符             — Asked elated, got mild smile; asked grieving, got mild frown.
+  4. 情绪近似但错             — Asked angry, got serious; asked surprised, got curious.
+  5. 情绪不稳定               — Emotion flickers / drifts inconsistently.
+
+[L3 · default S3]
+  6. 情绪表现力弱             — Right emotion but weak expressiveness.
+  7. 情绪仅部分时段正确         — Correct emotion for partial duration only.
+
+================================================================
+Hard rules (read before Step 3)
+================================================================
+- **P1 (multi-trigger)**: 多人情绪要求时，可对每人独立 log。
+- **P2 (no synonymous double-count)**: Precedence:
+  - `情绪缺失/无表情` 与 `情绪完全错` 互斥（前者：脸为中性；后者：脸表达了错的情绪）
+  - `情绪完全错` > `情绪近似但错` > `情绪强度不符`
+  - `情绪不稳定` 独立（轴 = 时间稳定性）
+  - `情绪表现力弱` > `情绪仅部分时段正确`
+- **P3 (saliency upgrade)**: 持续无表情 = S1/S2，不能 demote。
+- **Insufficient evidence**: 写 "证据不足，无法确认"，不猜。
+
+================================================================
+Analysis flow (5 steps; follow strictly)
+================================================================
+**Step 1 · Factual video description**: Describe facial expression cues (smile / frown / brow furrow / eye widen / tear / lip tremble) and body cues (slumped / energized) across the timeline. Pure observation.
+
+**Step 2 · Prompt emotion extraction**:
+  - 主体情绪要求: <or "未明确要求">
+  - 情绪强度: <strong / mild / unspecified>
+
+**Step 3 · Per-sub-item check**: Cite Step 1 + Step 2.
+
+**Step 4 · Aggregation**.
+
+**Step 5 · Apply hard scoring constraints** → score_5.
+
+================================================================
+5-point scale + hard constraints
+================================================================
+ 1. S1_count >= 2                                          → score_5 = 1
+ 2. S1_count = 1 AND S2_count >= 1                         → score_5 = 1
+ 3. S1_count = 1                                           → score_5 = 2
+ 4. S1_count = 0 AND S2_count >= 2                         → score_5 = 2
+ 5. S1_count = 0 AND S2_count = 1                          → score_5 = 3
+ 6. S1_count = 0 AND S2_count = 0 AND S3_count >= 3        → score_5 = 3
+ 7. S1_count = 0 AND S2_count = 0 AND S3_count in {{1, 2}}   → score_5 = 4
+ 8. S1_count = 0 AND S2_count = 0 AND S3_count = 0         → score_5 = 5
+
+If prompt has no emotion requirement → score_5 = 5; mark all sub-items false with 分析="prompt 未明确要求".
+
+================================================================
+Output JSON
+================================================================
+{{
+  "情绪一致性": {{
+    "事实描述": "",
+    "prompt情绪要求": "",
+    "情绪强度要求": "",
+    "视频实际情绪": "",
+    "逐项分析": {{
+      "情绪完全错":      {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "情绪缺失/无表情": {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "情绪强度不符":    {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "情绪近似但错":    {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "情绪不稳定":      {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "情绪表现力弱":    {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "情绪仅部分时段正确": {{ "是否有问题": false, "严重度": null, "分析": "" }}
+    }},
+    "汇总": {{ "问题子项列表": [], "S1_count": 0, "S2_count": 0, "S3_count": 0 }},
+    "score_5": 5,
+    "评分档位": "优秀",
+    "总评理由": ""
+  }}
+}}
+
+Output ONLY the JSON.

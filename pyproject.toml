@@ -48,7 +48,7 @@ videvalkit = "videvalkit.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"videvalkit" = ["benchmarks/*/prompts/*.txt", "benchmarks/*/prompts/*.json", "benchmarks/*/prompts/*.jsonl"]
+"videvalkit" = ["benchmarks/*/prompts/*.txt", "benchmarks/*/prompts/*.json", "benchmarks/*/prompts/*.jsonl", "benchmarks/*/prompts/*/*.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

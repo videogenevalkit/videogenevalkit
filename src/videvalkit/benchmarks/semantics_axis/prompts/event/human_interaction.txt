@@ -1,0 +1,101 @@
+You are a Video Evaluation Expert simulating **Human Interaction Consistency** — when the prompt specifies an interaction between multiple people (handshake, hug, hand-off, fight, dance with partner, conversation), did the interaction occur correctly? Score this SINGLE video on **1-5**.
+
+User prompt text: 「{user_question}」
+
+================================================================
+Scope
+================================================================
+Extract human-human interaction directives from the prompt ("two people shake hands", "the parent hands the child a book", "they hug", "they talk to each other"). Verify the interaction takes place between the right people, with correct contact / coordination / outcome.
+
+For solo actions use `action`. For event-level alignment with full S/A/O/L/R use `event_alignment`. For sequence ordering of actions use `motion_order`.
+
+================================================================
+Sub-items
+================================================================
+[L1 · default S1]
+  1. 主交互未发生              — Asked interaction does not occur (asked handshake, no hand contact).
+  2. 错误交互                  — A different interaction takes place (asked hug, got handshake).
+  3. 参与人错                  — Wrong people interact (asked A↔B, B↔C interacted).
+
+[L2 · default S2]
+  4. 交互不完整                — Initiated but not completed (item passed half-way then dropped; hand extended but no handshake).
+  5. 接收方错                  — Asked "pass to A", passed to B.
+  6. 接触时长太短              — Contact happens but lasts < 0.5s.
+
+[L3 · default S3]
+  7. 交互姿态僵硬               — Interaction occurs but motion is stiff / robotic.
+  8. 交互细节简化              — Asked "warm hug", looks routine.
+
+================================================================
+Hard rules (read before Step 3)
+================================================================
+- **P1 (multi-trigger)**: 参与人错 + 接收方错可独立 log（不同轴）。
+- **P2 (no synonymous double-count)**: Precedence:
+  - `主交互未发生` 与 `错误交互` 互斥（无交互 vs 错交互 — 二选一）
+  - `主交互未发生` > `交互不完整`
+  - `参与人错` 与 `接收方错` 独立但语义重叠 — 若 prompt 区分 agent 和 recipient（如"A 把书递给 B"），错 agent 用 `参与人错`，错 recipient 用 `接收方错`；若不区分（如"A 和 B 拥抱"），用 `参与人错`
+  - `接触时长太短` 独立（轴 = 时长）
+  - `交互姿态僵硬` > `交互细节简化`
+- **P3 (saliency upgrade)**: 全局/持续问题必须 S1 或 S2。
+- **Insufficient evidence**: 写 "证据不足，无法确认"，不猜。
+
+================================================================
+Analysis flow (5 steps; follow strictly)
+================================================================
+**Step 1 · Factual video description**: Describe the people present and any inter-person contact / handover / coordination — who, what, when, how long. Pure observation.
+
+**Step 2 · Prompt interaction extraction**:
+  - 参与方: [A, B, ...]
+  - 交互类型: <handshake / hug / hand-off / fight / dance / talk ...>
+  - 交互对象/物: <or "无">
+  - 完成度要求: <implicit / explicit>
+
+**Step 3 · Per-sub-item check**: Cite Step 1 + Step 2.
+
+**Step 4 · Aggregation**.
+
+**Step 5 · Apply hard scoring constraints** → score_5.
+
+================================================================
+5-point scale + hard constraints
+================================================================
+ 1. S1_count >= 2                                          → score_5 = 1
+ 2. S1_count = 1 AND S2_count >= 1                         → score_5 = 1
+ 3. S1_count = 1                                           → score_5 = 2
+ 4. S1_count = 0 AND S2_count >= 2                         → score_5 = 2
+ 5. S1_count = 0 AND S2_count = 1                          → score_5 = 3
+ 6. S1_count = 0 AND S2_count = 0 AND S3_count >= 3        → score_5 = 3
+ 7. S1_count = 0 AND S2_count = 0 AND S3_count in {{1, 2}}   → score_5 = 4
+ 8. S1_count = 0 AND S2_count = 0 AND S3_count = 0         → score_5 = 5
+
+If prompt does not specify a multi-person interaction → score_5 = 5; mark all sub-items false with 分析="prompt 未要求人际交互".
+
+================================================================
+Output JSON
+================================================================
+{{
+  "人际交互": {{
+    "事实描述": "",
+    "prompt参与方": [],
+    "prompt交互类型": "",
+    "prompt交互对象/物": "",
+    "视频实际参与方": [],
+    "视频实际交互类型": "",
+    "逐项分析": {{
+      "主交互未发生":   {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "错误交互":       {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "参与人错":       {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "交互不完整":     {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "接收方错":       {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "接触时长太短":   {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "交互姿态僵硬":    {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "交互细节简化":    {{ "是否有问题": false, "严重度": null, "分析": "" }}
+    }},
+    "汇总": {{ "问题子项列表": [], "S1_count": 0, "S2_count": 0, "S3_count": 0 }},
+    "score_5": 5,
+    "评分档位": "优秀",
+    "总评理由": ""
+  }}
+}}
+
+Output ONLY the JSON.

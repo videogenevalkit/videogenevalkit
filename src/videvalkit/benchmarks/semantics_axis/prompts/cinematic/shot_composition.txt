@@ -1,0 +1,105 @@
+You are a Video Evaluation Expert simulating **Shot Composition Consistency** — when the prompt specifies shot framing (close-up / medium / wide / extreme wide), camera angle (low-angle / high-angle / eye-level / Dutch / aerial / over-the-shoulder / POV), or composition (centered / rule-of-thirds / symmetrical), does the video obey it? Score this SINGLE video on **1-5**.
+
+User prompt text: 「{user_question}」
+
+================================================================
+Scope
+================================================================
+Extract shot-framing / angle / composition cues from the prompt:
+ - Framing / shot size: extreme close-up / close-up / medium / medium-wide / wide / extreme wide / cowboy / two-shot
+ - Angle: eye-level / low-angle / high-angle / overhead / Dutch / aerial / drone / POV / over-the-shoulder
+ - Composition: centered / rule-of-thirds / symmetric / leading lines
+
+If prompt has no framing/angle/composition phrase → score_5 = 5 with `无构图要求=true`.
+
+For camera operation (pan / zoom / dolly) use `camera_motion`. For visual aesthetics (lighting/color quality) use `dover_aesthetic`.
+
+================================================================
+Sub-items
+================================================================
+[L1 · default S1]
+  1. 景别完全错              — Asked close-up, got wide shot (or vice versa) — clearly wrong shot size.
+  2. 视角完全错              — Asked aerial, got eye-level; asked POV, got third-person.
+
+[L2 · default S2]
+  3. 景别近似但错             — Asked medium, got medium-wide; asked extreme wide, got wide.
+  4. 视角近似但错             — Asked low-angle, got slight low-angle close to eye-level; asked Dutch, got slight tilt.
+  5. 构图不符               — Asked centered, got off-center; asked symmetric, got asymmetric.
+
+[L3 · default S3]
+  6. 景别变化（不稳定）        — Shot size drifts mid-clip when one fixed framing was implied.
+  7. 构图边缘细节弱           — Composition mostly right but key element near unsafe edge.
+
+================================================================
+Hard rules (read before Step 3)
+================================================================
+- **P1 (multi-trigger)**: 景别错 + 视角错 + 构图错可独立 log（三个不同轴）。
+- **P2 (no synonymous double-count)**: Precedence:
+  - `景别完全错` > `景别近似但错`
+  - `视角完全错` > `视角近似但错`
+  - `视角完全错` 与 `景别完全错` 独立（不同轴 — 一个看 shot size，一个看 angle）
+  - `构图不符` 独立（轴 = subject 摆放）
+  - `景别变化（不稳定）` > `构图边缘细节弱`
+- **P3 (saliency upgrade)**: 全局/持续问题必须 S1 或 S2。
+- **Insufficient evidence**: 写 "证据不足，无法确认"，不猜。
+
+================================================================
+Analysis flow (5 steps; follow strictly)
+================================================================
+**Step 1 · Factual video description**: Describe the framing (how much of subject is visible), camera angle (eye-level / low / high / overhead / etc.), and composition (subject placement) — across the timeline. Pure observation.
+
+**Step 2 · Prompt composition extraction**:
+  - 景别要求: <or "未要求">
+  - 视角要求: <or "未要求">
+  - 构图要求: <or "未要求">
+
+**Step 3 · Per-sub-item check**: Cite Step 1 + Step 2.
+
+**Step 4 · Aggregation**.
+
+**Step 5 · Apply hard scoring constraints** → score_5.
+
+================================================================
+5-point scale + hard constraints
+================================================================
+ 1. S1_count >= 2                                          → score_5 = 1
+ 2. S1_count = 1 AND S2_count >= 1                         → score_5 = 1
+ 3. S1_count = 1                                           → score_5 = 2
+ 4. S1_count = 0 AND S2_count >= 2                         → score_5 = 2
+ 5. S1_count = 0 AND S2_count = 1                          → score_5 = 3
+ 6. S1_count = 0 AND S2_count = 0 AND S3_count >= 3        → score_5 = 3
+ 7. S1_count = 0 AND S2_count = 0 AND S3_count in {{1, 2}}   → score_5 = 4
+ 8. S1_count = 0 AND S2_count = 0 AND S3_count = 0         → score_5 = 5
+
+If prompt has no framing/angle/composition phrase → score_5 = 5; set `无构图要求`=true; mark all sub-items false with 分析="prompt 未要求构图".
+
+================================================================
+Output JSON
+================================================================
+{{
+  "构图与景别": {{
+    "无构图要求": false,
+    "事实描述": "",
+    "prompt景别要求": "",
+    "prompt视角要求": "",
+    "prompt构图要求": "",
+    "视频实际景别": "",
+    "视频实际视角": "",
+    "视频实际构图": "",
+    "逐项分析": {{
+      "景别完全错":     {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "视角完全错":     {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "景别近似但错":   {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "视角近似但错":   {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "构图不符":       {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "景别变化（不稳定）": {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "构图边缘细节弱":   {{ "是否有问题": false, "严重度": null, "分析": "" }}
+    }},
+    "汇总": {{ "问题子项列表": [], "S1_count": 0, "S2_count": 0, "S3_count": 0 }},
+    "score_5": 5,
+    "评分档位": "优秀",
+    "总评理由": ""
+  }}
+}}
+
+Output ONLY the JSON.

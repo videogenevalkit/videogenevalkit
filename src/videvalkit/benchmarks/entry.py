@@ -32,6 +32,7 @@ _REGISTRY = {
     "vbench_pp":     "videvalkit.benchmarks.vbench_pp:VBenchPPBenchmark",
     "v_reasonbench": "videvalkit.benchmarks.v_reasonbench:VReasonBenchBenchmark",
     "worldscore":    "videvalkit.benchmarks.worldscore:WorldScoreBenchmark",
+    "semantics_axis": "videvalkit.benchmarks.semantics_axis:SemanticsAxisBenchmark",
 }
 
 

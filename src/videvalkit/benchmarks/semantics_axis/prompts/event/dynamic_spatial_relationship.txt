@@ -1,0 +1,96 @@
+You are a Video Evaluation Expert simulating **Entity Dynamic Spatial Relationship** — when the prompt asks an entity's position to CHANGE (move, transition, swap, approach, recede), did that movement happen? Score this SINGLE video on **1-5**.
+
+User prompt text: 「{user_question}」
+
+================================================================
+Scope
+================================================================
+Extract motion-trajectory directives from the prompt ("the cat runs from left to right", "the boy moves to behind the chair", "the drone descends to ground level", "two characters swap places"). Verify the directional movement happens.
+
+This is the dynamic counterpart to `spatial_relationship` (which checks static placement).
+
+================================================================
+Sub-items
+================================================================
+[L1 · default S1]
+  1. 要求的空间移动未发生      — The asked movement never happens (entity stays in place).
+  2. 移动方向反               — Direction reversed (asked left→right, got right→left).
+
+[L2 · default S2]
+  3. 移动不完整               — Movement starts but doesn't reach the target position.
+  4. 移动路径错               — Movement happens but along wrong path (asked straight, got curved around obstacle when straight was specified, or vice versa).
+  5. 多体移动只完成部分        — Multi-entity move (asked "two cats swap"), only one moves.
+
+[L3 · default S3]
+  6. 移动幅度不足             — Right direction but too small a displacement.
+  7. 仅短暂正确移动            — Movement happens transiently then reverts.
+
+================================================================
+Hard rules (read before Step 3)
+================================================================
+- **P1 (multi-trigger)**: 多体移动要求时，可对每体独立 log。
+- **P2 (no synonymous double-count)**: Precedence:
+  - `要求的空间移动未发生` 与 `移动方向反` 互斥（无移动 vs 反方向 — 二选一）
+  - `要求的空间移动未发生` > `移动不完整`
+  - `移动路径错` 独立（轴 = 路径形状）
+  - `多体移动只完成部分` 独立（轴 = 多体完成度）
+  - `移动幅度不足` > `仅短暂正确移动`
+- **P3 (saliency upgrade)**: 持续无移动 = S1，不能 demote。
+- **Insufficient evidence**: 写 "证据不足，无法确认"，不猜。
+
+================================================================
+Analysis flow (5 steps; follow strictly)
+================================================================
+**Step 1 · Factual video description**: For each prompt-relevant entity, describe its trajectory — start position, intermediate positions, end position, path shape. Pure observation.
+
+**Step 2 · Prompt movement extraction**:
+  - 实体: <entity>
+  - 移动要求: [(from_position, to_position, path_constraint?), ...]
+
+**Step 3 · Per-sub-item check**: Cite Step 1 + Step 2.
+
+**Step 4 · Aggregation**.
+
+**Step 5 · Apply hard scoring constraints** → score_5.
+
+================================================================
+5-point scale + hard constraints
+================================================================
+ 1. S1_count >= 2                                          → score_5 = 1
+ 2. S1_count = 1 AND S2_count >= 1                         → score_5 = 1
+ 3. S1_count = 1                                           → score_5 = 2
+ 4. S1_count = 0 AND S2_count >= 2                         → score_5 = 2
+ 5. S1_count = 0 AND S2_count = 1                          → score_5 = 3
+ 6. S1_count = 0 AND S2_count = 0 AND S3_count >= 3        → score_5 = 3
+ 7. S1_count = 0 AND S2_count = 0 AND S3_count in {{1, 2}}   → score_5 = 4
+ 8. S1_count = 0 AND S2_count = 0 AND S3_count = 0         → score_5 = 5
+
+If prompt does not require entity movement → score_5 = 5; mark all sub-items false with 分析="prompt 未要求位置变化".
+
+================================================================
+Output JSON
+================================================================
+{{
+  "动态空间关系": {{
+    "事实描述": "",
+    "prompt移动要求": [],
+    "实体起始位置": [],
+    "实体终止位置": [],
+    "移动路径": [],
+    "逐项分析": {{
+      "要求的空间移动未发生":  {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "移动方向反":           {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "移动不完整":           {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "移动路径错":           {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "多体移动只完成部分":     {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "移动幅度不足":         {{ "是否有问题": false, "严重度": null, "分析": "" }},
+      "仅短暂正确移动":        {{ "是否有问题": false, "严重度": null, "分析": "" }}
+    }},
+    "汇总": {{ "问题子项列表": [], "S1_count": 0, "S2_count": 0, "S3_count": 0 }},
+    "score_5": 5,
+    "评分档位": "优秀",
+    "总评理由": ""
+  }}
+}}
+
+Output ONLY the JSON.

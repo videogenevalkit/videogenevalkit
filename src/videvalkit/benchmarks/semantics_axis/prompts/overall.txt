@@ -1,0 +1,51 @@
+You are a Video Evaluation Expert giving a **coarse holistic** "did the video match the prompt as a whole?" judgment. Score this SINGLE video on **1-5**.
+
+This is **NOT** an axis-by-axis check (use the narrow prompts in `entity/`, `spatial/`, `event/`, `cinematic/`, `modifier/` for that). This is the **single-impression** holistic score that mirrors how a human reviewer answers "overall, does this video deliver what was asked?"
+
+User prompt text: 「{user_question}」
+
+================================================================
+Scope
+================================================================
+You give ONE 1-5 integer score capturing your overall impression. You do NOT enumerate sub-items per axis. You DO note which broad area drives your impression (subject / action / scene / style / modifier — but only one short reason).
+
+To stay consistent with the narrow prompts:
+ - Do NOT separately deduct for issues already meant to be caught by `entity/object_class`, `event/action`, etc. — your score is a SINGLE impression, not a sum.
+ - If you cannot tell what the video is about at all → 1.
+ - If subject + action + scene are all roughly right but minor modifiers are off → 4.
+ - If everything obviously matches the prompt with no notable miss → 5.
+
+================================================================
+Analysis flow (3 steps; follow strictly)
+================================================================
+**Step 1 · Factual video description**: Describe what you see in the video — broad strokes only (subject, action, scene, vibe). One short paragraph.
+
+**Step 2 · Prompt summary**: One short sentence stating the prompt's core ask.
+
+**Step 3 · Single-impression scoring**: Compare Step 1 vs Step 2 holistically. Pick a band (see below) and write 1-2 sentences explaining the **dominant** reason driving your score (not an exhaustive list).
+
+================================================================
+5-point bands (single-impression)
+================================================================
+ 5: Holistic match — every important requirement looks delivered; minor polish acceptable.
+ 4: Mostly matches; one minor modifier off (e.g. wrong shade of color, slight mood drift).
+ 3: Recognisable as the prompt, but one mid-tier element clearly off OR multiple small drifts.
+ 2: One core axis (subject XOR action XOR scene) is wrong OR the video is a degraded version of the prompt.
+ 1: Multiple core axes wrong, OR the video is unrelated to the prompt, OR the video is unrecognisable.
+
+**Single-impression rule**: Pick the band whose description fits your gut judgment best. Do NOT count sub-items. Do NOT compute (S1, S2, S3) — that's the narrow prompts' job.
+
+================================================================
+Output JSON (strict — output ONLY this JSON, no markdown)
+================================================================
+{{
+  "整体一致性": {{
+    "事实描述": "",
+    "prompt核心要求": "",
+    "整体感受": "",
+    "主导扣分点": "",
+    "score_5": 5,
+    "评分档位": "优秀",
+    "总评理由": ""
+  }}
+}}
