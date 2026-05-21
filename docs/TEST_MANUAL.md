@@ -1086,6 +1086,68 @@ Every per-video score is **bit-identical** between the two runs. The cv2 seek wa
 
 ---
 
+### 4.7 Semantics Axis
+
+> **In-house benchmark.** `semantics_axis` is not anchored to a public leaderboard — it is the in-house *Semantics Axis Eval* (from `video_eval`), integrated as a toolkit benchmark. There is therefore no paper-Δ; validation is "does every axis score end-to-end" plus (future) human-eval correlation.
+
+**Reference**
+
+| | |
+|---|---|
+| Source | in-house `video_eval` Semantics Axis Eval (v1) |
+| Reproduces | — (no public leaderboard) |
+| Adapter | `src/videvalkit/benchmarks/semantics_axis/` |
+| Implementation status | ✅ end-to-end · 21 / 21 axes producing scores |
+
+**Method**
+
+A VLM-as-judge prompt-following evaluation. 21 narrow axes + a holistic `overall`, each a structured 5-step-CoT system prompt (bundled verbatim under `prompts/`) that scores one video **1-5** on a single axis. Output is JSON-only; the parser reads `score_5`, the `不适用` (scope-mismatch / N/A) flag and the `汇总` S1/S2/S3 severity counts. No local checkpoints — every axis is scored through a `SUPPORTED_JUDGES` VLM endpoint (default `gemma-4-31b-local`).
+
+**Dimensions (21, grouped)**
+
+| Group | n | Axes |
+|---|---|---|
+| entity | 9 | object_class · multiple_objects · color · material · scene · style · pose · emotion · text_ocr |
+| spatial | 1 | spatial_relationship |
+| event | 7 | action · motion_order · dynamic_attribute · dynamic_spatial_relationship · human_interaction · complex_plot · complex_landscape |
+| cinematic | 2 | camera_motion · shot_composition |
+| modifier | 1 | temporal_modifier |
+| (top-level) | 1 | overall (holistic, 3-step CoT) |
+
+**Dataset**
+
+| | |
+|---|---|
+| Prompts | curated from the T2V prompt-tag table; each prompt carries a `dimensions` list = the axes in scope for it |
+| Reference videos | `videogenevalkit/smoke-data` → `semantics_axis/` — 9 prompts × 3 models (pangu3, wan14b, seedance20) = 27 videos, covering all 21 axes |
+| Scale | 1-5 integer per axis |
+
+**Aggregation**
+
+`weighted_sum` — per-axis mean over prompts, then mean across axes for the headline. `meta.per_group` additionally reports the mean of each axis group.
+
+**Validation test results (2026-05-21)**
+
+Full 21-axis run, model `pangu3`, 9 videos, judge `gemma-4-31b-local`:
+
+| | Value |
+|---|---|
+| Raw results | 58 |
+| Axes scored | **21 / 21** |
+| Parse errors | 0 |
+| Headline (mean across axes) | ≈ 4.35 / 5 |
+| per_group | entity 4.24 · spatial 5.00 · event 4.40 · cinematic 3.88 · modifier 5.00 · overall 4.56 |
+
+Per-axis spot values (pangu3): `text_ocr` 1.0 and `action` 2.0 are genuine low scores; `camera_motion` 2.75; most entity/event axes 4-5. pytest registration + prompt-loading: **62/62 passed**. The integration is also verified as a fresh-clone install (`videvalkit list benchmarks` shows `semantics_axis · 21 · gemma-4-31b-local`).
+
+**Known limitations**
+
+- Smoke values are 3-9 video estimates — not a calibrated benchmark number.
+- Human-eval correlation (Spearman ρ / Krippendorff α from the v1 study) is **not yet wired in** — that is the planned validation evidence and will be added here.
+- Axis prompts are Chinese-rubric with Chinese JSON keys (kept as-is per the source method); the parser is language-agnostic (keys on `score_5`).
+
+---
+
 ## 5. Triage: when scores do not match
 
 Standard debug ladder. Stop at the first answer that fixes the problem.

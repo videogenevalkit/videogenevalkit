@@ -320,16 +320,17 @@ cat runs/first/results/summary/worldjen/Kling.json
 
 下面每个小节都是完整的可复制粘贴运行示例：拉取 smoke 数据、从 HuggingFace `videogenevalkit/checkpoints` 取出对应 checkpoint、暂存 3-5 个样例视频、执行评测、看分数。所有示例都于 2026-05-19 完成了端到端验证；下文的预期分数即为当次运行（每基准 3 个样例视频）的实际结果。
 
-**6 个基准速查表：**
+**7 个基准速查表（按小节顺序）：**
 
 | 节号 | Bench / 维度 | 评分器 | Checkpoint（来自 `videogenevalkit/checkpoints`） | 用时（3 视频） | 显存 | 预期分数 |
 |---|---|---|---|---:|---:|---|
-| 6.4 | `worldjen` / 16 维 | Gemma-4-31B vLLM | — 无本地权重 | ~5 min | 0 GB | overall ≈ 3.2 / 5 |
 | 6.1 | `vbench` / `subject_consistency` | DINO ViT-B/16 | `vbench/pretrained/dino_model/`（343 MB） | ~30 s | 2 GB | ≈ 0.92 |
 | 6.2 | `vbench2` / `Camera_Motion` | CoTracker3（内置） | `vbench2/third_party/cotracker/`（204 MB） | ~1 min | 4 GB | ≈ 0.67 |
 | 6.3 | `videobench` / `action_consistency` | Gemma-4-31B vLLM | — 无本地权重 | ~2 min | 0 GB | ≈ 2.0（1-5 原始分） |
+| 6.4 | `worldjen` / 16 维 | Gemma-4-31B vLLM | — 无本地权重 | ~5 min | 0 GB | overall ≈ 3.2 / 5 |
 | 6.5 | `worldscore` / `motion_magnitude` | SEA-RAFT | `worldscore/Tartan-C-T-TSKH-*` + `raft-things`（150 MB） | ~2 min | 4 GB | ≈ 56.4（×100） |
 | 6.6 | `t2vcompbench` / `action_binding`（paper-mode） | LLaVA-1.6-34B | `hf-models/liuhaotian/llava-v1.6-34b/`（68 GB） | LLaVA 加载后 ~5 min | 70 GB | raw 7.22 → norm 0.69 |
+| 6.7 | `semantics_axis` / 21 axes | Gemma-4-31B vLLM | — 无本地权重 | ~5 min | 0 GB | 头条 ≈ 4.3 / 5 |
 
 运行间方差：CV 类维度（DINO、CoTracker3、SEA-RAFT、GroundingDINO）约 ±0.05；VLM judge 类维度（Gemma-4-31B、LLaVA-1.6-34B）约 ±0.15（temperature=0.2 采样所致）。各维容忍带详见 [`TEST_MANUAL.md`](TEST_MANUAL.md) §3。
 

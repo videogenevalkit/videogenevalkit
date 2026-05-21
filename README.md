@@ -2,11 +2,11 @@
 
 **Unified evaluation toolkit for text-to-video generation models.**
 
-One config, one entrypoint, six benchmarks. Score your model on VBench v1, VBench-2.0, Video-Bench, WorldJen, WorldScore, and T2V-CompBench from a single command. Compares byte-for-byte against the official leaderboards.
+One config, one entrypoint, seven benchmarks. Score your model on VBench v1, VBench-2.0, Video-Bench, WorldJen, WorldScore, T2V-CompBench, and Semantics-Axis from a single command. Compares byte-for-byte against the official leaderboards.
 
 <p align="left">
   <a href="#quickstart"><img alt="quickstart" src="https://img.shields.io/badge/quickstart-30%20min-blue"></a>
-  <a href="#whats-supported"><img alt="benchmarks" src="https://img.shields.io/badge/benchmarks-6-orange"></a>
+  <a href="#whats-supported"><img alt="benchmarks" src="https://img.shields.io/badge/benchmarks-7-orange"></a>
   <a href="https://huggingface.co/datasets/videogenevalkit/checkpoints"><img alt="HF checkpoints" src="https://img.shields.io/badge/HF-checkpoints-yellow?logo=huggingface"></a>
   <a href="https://huggingface.co/datasets/videogenevalkit/smoke-data"><img alt="HF smoke data" src="https://img.shields.io/badge/HF-smoke%20data-yellow?logo=huggingface"></a>
   <a href="LICENSES/"><img alt="licenses" src="https://img.shields.io/badge/licenses-multi--upstream-lightgrey"></a>
@@ -26,6 +26,7 @@ We re-ran the official leaderboards for the 6 anchored benchmarks. **mean |Δ| v
 | **Video-Bench** | cogvideox5b | 9/9 | judge-substitution offset | — | Gemma stand-in for GPT-4o; static + alignment dims match, dynamic-quality drifts (documented) |
 | **WorldJen** | Kling-v2.6 | 16/16 | — | — | PHAS 3.66 vs paper-Gemma 4.12; Δ -0.47 (decord-vs-cv2 frame variance) |
 | **WorldScore** | CogVideoX-5B | 10/10 | full pipeline | — | DROID-SLAM + SEA-RAFT + VFIMamba + SAM2 stack wired |
+| **Semantics-Axis** | pangu3 / wan14b / seedance20 | 21/21 | in-house (no leaderboard) | — | VLM-judge prompt-following; all 21 axes score end-to-end |
 
 Full per-dim tables: see [`docs/TEST_MANUAL.md`](docs/TEST_MANUAL.md).
 
@@ -33,7 +34,7 @@ Full per-dim tables: see [`docs/TEST_MANUAL.md`](docs/TEST_MANUAL.md).
 
 ## What's supported
 
-**6 anchored benchmark adapters** (all production-ready):
+**7 benchmark adapters** — 6 anchored to public leaderboards + 1 in-house (all production-ready):
 
 | Adapter | Upstream | What it scores |
 |---|---|---|
@@ -43,6 +44,7 @@ Full per-dim tables: see [`docs/TEST_MANUAL.md`](docs/TEST_MANUAL.md).
 | `worldjen` | [WorldJen](https://github.com/moonmath-ai/WorldJen-benchmarking-subsystem) | 16 dims grouped into motion_stability / logic_physics / instruction_adherence / aesthetic; PHAS aggregator |
 | `worldscore` | [WorldScore](https://github.com/yhw-yhw/WorldScore) | 10 dims: 7 static (CLIP/DROID-SLAM/SAM/GD/IQA) + 3 dynamic (RAFT/VFIMamba/Motion-Acc) |
 | `t2vcompbench` | [T2V-CompBench V2](https://github.com/KaiyueSun98/T2V-CompBench/tree/V2) | 7 compositional dims; LLaVA-1.6-34B MLLM + GD-SwinT-OGC + SAM-H + Depth-Anything V1 + DOT |
+| `semantics_axis` | in-house (Semantics Axis Eval) | 21 prompt-following axes — entity / spatial / event / cinematic / modifier — + holistic `overall`; VLM-judge, 1-5, no checkpoints |
 
 Plus 3 supplementary stubs landing (Physics-IQ, VBench++, V-ReasonBench).
 
@@ -84,7 +86,7 @@ The tarball is a `conda-pack` snapshot of the validated working env — Python 3
 ### 2. Fetch smoke data + checkpoints from HF (~ 15 min, ~ 8 GB)
 
 ```bash
-# 3 GB of representative videos + prompts across all 6 benchmarks
+# representative videos + prompts across all 7 benchmarks
 videvalkit fetch-smoke-data
 
 # 5 GB of needed model checkpoints (GroundingDINO, SAM-H, Depth-Anything V1, DOT)
@@ -142,9 +144,9 @@ videvalkit aggregate --workspace ~/runs/worldjen/ws
 
 ---
 
-## Running examples for all 6 benchmarks
+## Running examples for all 7 benchmarks
 
-Worldjen (above) needs no local checkpoints. The other 5 each pull a specific checkpoint from `videogenevalkit/checkpoints` on HuggingFace. Full step-by-step recipes in [`docs/USER_MANUAL_en.md` §6](docs/USER_MANUAL_en.md).
+Worldjen (above) needs no local checkpoints. Four others each pull a specific checkpoint from `videogenevalkit/checkpoints` on HuggingFace; `semantics_axis` is judge-only. Full step-by-step recipes in [`docs/USER_MANUAL_en.md` §6](docs/USER_MANUAL_en.md).
 
 | # | Bench / dim | Scorer | Ckpt fetch (`videogenevalkit/checkpoints`) | Wallclock (3 vids) | GPU mem | Expected score |
 |---|---|---|---|---:|---:|---|
@@ -154,8 +156,9 @@ Worldjen (above) needs no local checkpoints. The other 5 each pull a specific ch
 | 4 | `videobench` / `action_consistency` | Gemma-4-31B vLLM | — (no local ckpt) | ~2 min | 0 GB | ≈ 2.0 (raw 1-5) |
 | 5 | `worldscore` / `motion_magnitude` | SEA-RAFT | `worldscore/Tartan-C-T-TSKH-*` + `raft-things` (150 MB) | ~2 min | 4 GB | ≈ 56.4 (×100) |
 | 6 | `t2vcompbench` / `action_binding` (paper-mode) | LLaVA-1.6-34B | `hf-models/liuhaotian/llava-v1.6-34b/` (68 GB) | ~5 min after model load | 70 GB | raw 7.22 → norm 0.69 |
+| 7 | `semantics_axis` / 21 axes | Gemma-4-31B vLLM | — (no local ckpt) | ~5 min | 0 GB | headline ≈ 4.3 of 5 |
 
-Numbers above are from the integration test run on 2026-05-19 (3 sample videos each); run-to-run variance is typically ±0.05 for CV-based dims (DINO/CoTracker3/SEA-RAFT/GroundingDINO) and ±0.15 for VLM-judge dims (Gemma, LLaVA-34B) due to temperature-0.2 sampling. Full validation against published leaderboards in [`docs/TEST_MANUAL.md`](docs/TEST_MANUAL.md).
+Rows 1-6 are from the integration test on 2026-05-19, row 7 from 2026-05-21 (3 sample videos each); run-to-run variance is typically ±0.05 for CV-based dims (DINO/CoTracker3/SEA-RAFT/GroundingDINO) and ±0.15 for VLM-judge dims (Gemma, LLaVA-34B) due to temperature-0.2 sampling. Full validation against published leaderboards in [`docs/TEST_MANUAL.md`](docs/TEST_MANUAL.md).
 
 ---
 

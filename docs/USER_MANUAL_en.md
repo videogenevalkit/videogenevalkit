@@ -318,16 +318,17 @@ The `aggregate` step writes `runs/first/results/leaderboard/cross_benchmark.json
 
 Each subsection below is a complete copy-pasteable running example: fetch the smoke data, fetch the specific checkpoint from `videogenevalkit/checkpoints` on HuggingFace, stage 3-5 sample videos, run the eval, see the score. All examples were validated end-to-end on 2026-05-19; expected scores below come from those runs (3 sample videos each).
 
-**Quick summary table** — all 6 in one view:
+**Quick summary table** — all 7 in section order:
 
 | # | Bench / dim | Scorer | Checkpoint (from `videogenevalkit/checkpoints`) | Wallclock (3 vids) | GPU mem | Expected score |
 |---|---|---|---|---:|---:|---|
-| 6.4 | `worldjen` / 16 dims | Gemma-4-31B vLLM | — (no local ckpt) | ~5 min | 0 GB | overall ≈ 3.2 of 5 |
 | 6.1 | `vbench` / `subject_consistency` | DINO ViT-B/16 | `vbench/pretrained/dino_model/` (343 MB) | ~30 s | 2 GB | ≈ 0.92 |
 | 6.2 | `vbench2` / `Camera_Motion` | CoTracker3 (vendored) | `vbench2/third_party/cotracker/` (204 MB) | ~1 min | 4 GB | ≈ 0.67 |
 | 6.3 | `videobench` / `action_consistency` | Gemma-4-31B vLLM | — (no local ckpt) | ~2 min | 0 GB | ≈ 2.0 (raw 1-5) |
+| 6.4 | `worldjen` / 16 dims | Gemma-4-31B vLLM | — (no local ckpt) | ~5 min | 0 GB | overall ≈ 3.2 of 5 |
 | 6.5 | `worldscore` / `motion_magnitude` | SEA-RAFT | `worldscore/Tartan-C-T-TSKH-*` + `raft-things` (150 MB) | ~2 min | 4 GB | ≈ 56.4 (×100) |
 | 6.6 | `t2vcompbench` / `action_binding` (paper-mode) | LLaVA-1.6-34B | `hf-models/liuhaotian/llava-v1.6-34b/` (68 GB) | ~5 min after model load | 70 GB | raw 7.22 → norm 0.69 |
+| 6.7 | `semantics_axis` / 21 axes | Gemma-4-31B vLLM | — (no local ckpt) | ~5 min | 0 GB | headline ≈ 4.3 of 5 |
 
 Run-to-run variance: ±0.05 on CV-based dims (DINO, CoTracker3, SEA-RAFT, GroundingDINO), ±0.15 on VLM-judge dims (Gemma-4-31B, LLaVA-1.6-34B). Tolerance bands per dim in [`TEST_MANUAL.md`](TEST_MANUAL.md) §3.
 
