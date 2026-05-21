@@ -1126,19 +1126,47 @@ A VLM-as-judge prompt-following evaluation. 21 narrow axes + a holistic `overall
 
 `weighted_sum` — per-axis mean over prompts, then mean across axes for the headline. `meta.per_group` additionally reports the mean of each axis group.
 
-**Validation test results (2026-05-21)**
+**Validation test results — 3-model comparison (2026-05-21)**
 
-Full 21-axis run, model `custom`, 9 videos, judge `gemma-4-31b-local`:
+Full 21-axis run on all 3 sample models, 9 videos each, judge `gemma-4-31b-local`.
+Every run produced 58 raw results, 21/21 axes scored, 0 parse errors.
 
-| | Value |
-|---|---|
-| Raw results | 58 |
-| Axes scored | **21 / 21** |
-| Parse errors | 0 |
-| Headline (mean across axes) | ≈ 4.35 / 5 |
-| per_group | entity 4.24 · spatial 5.00 · event 4.40 · cinematic 3.88 · modifier 5.00 · overall 4.56 |
+Headline ranking (mean across axes, 1-5):
 
-Per-axis spot values (custom): `text_ocr` 1.0 and `action` 2.0 are genuine low scores; `camera_motion` 2.75; most entity/event axes 4-5. pytest registration + prompt-loading: **62/62 passed**. The integration is also verified as a fresh-clone install (`videvalkit list benchmarks` shows `semantics_axis · 21 · gemma-4-31b-local`).
+| Rank | Model | Headline |
+|---|---|---:|
+| 1 | `seedance20` | **4.72** |
+| 2 | `wan14b` | 4.40 |
+| 3 | `custom` | 4.35 |
+
+Per-group means:
+
+| Group | custom | wan14b | seedance20 |
+|---|---:|---:|---:|
+| entity | 4.24 | 4.17 | 4.50 |
+| spatial | 5.00 | 5.00 | 5.00 |
+| event | 4.40 | 4.33 | 4.93 |
+| cinematic | 3.88 | 5.00 | 4.63 |
+| modifier | 5.00 | 5.00 | 5.00 |
+| overall | 4.56 | 4.56 | 4.89 |
+
+Notable per-axis differences:
+
+| Axis | custom | wan14b | seedance20 |
+|---|---:|---:|---:|
+| `action` | 2.00 | 5.00 | 4.50 |
+| `camera_motion` | 2.75 | 5.00 | 4.25 |
+| `complex_plot` | 5.00 | 2.00 | 5.00 |
+| `motion_order` | 5.00 | 3.50 | 5.00 |
+| `object_class` | 4.50 | 3.50 | 5.00 |
+| `text_ocr` | 1.00 | 1.00 | 2.00 |
+
+Reading: `seedance20` leads (strongest on event / entity / `overall`); `custom`'s weak
+spot is the cinematic group (`action` 2.0, `camera_motion` 2.75); `wan14b` is bimodal —
+perfect cinematic (5.0) but low `complex_plot` / `motion_order` / `object_class`. All
+three fail text rendering (`text_ocr` 1-2). pytest registration + prompt-loading:
+**62/62 passed**; integration also verified as a fresh-clone install (`videvalkit list
+benchmarks` shows `semantics_axis · 21 · gemma-4-31b-local`).
 
 **Known limitations**
 
