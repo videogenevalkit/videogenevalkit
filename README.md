@@ -26,7 +26,7 @@ We re-ran the official leaderboards for the 6 anchored benchmarks. **mean |Δ| v
 | **Video-Bench** | cogvideox5b | 9/9 | judge-substitution offset | — | Gemma stand-in for GPT-4o; static + alignment dims match, dynamic-quality drifts (documented) |
 | **WorldJen** | Kling-v2.6 | 16/16 | — | — | PHAS 3.66 vs paper-Gemma 4.12; Δ -0.47 (decord-vs-cv2 frame variance) |
 | **WorldScore** | CogVideoX-5B | 10/10 | full pipeline | — | DROID-SLAM + SEA-RAFT + VFIMamba + SAM2 stack wired |
-| **Semantics-Axis** | pangu3 / wan14b / seedance20 | 21/21 | in-house (no leaderboard) | — | VLM-judge prompt-following; all 21 axes score end-to-end |
+| **Semantics-Axis** | custom / wan14b / seedance20 | 21/21 | in-house (no leaderboard) | — | VLM-judge prompt-following; all 21 axes score end-to-end |
 
 Full per-dim tables: see [`docs/TEST_MANUAL.md`](docs/TEST_MANUAL.md).
 

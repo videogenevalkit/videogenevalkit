@@ -282,7 +282,7 @@ VBench v1 serves two prompt families per dim:
 | `temporal_flickering` | Are adjacent frames flicker-free? | static-region MSE between low-pass-filtered adjacent frames; static regions from optical-flow magnitude | (no pretrained — algorithmic) | "A still photograph of a coffee cup" | range 0.95 – 0.99 |
 | `motion_smoothness` | Does motion look continuous? | AMT video frame interpolation; the score is the MSE between predicted and real middle frames | AMT-G checkpoint (`amt-g.pth`, in `pretrained/amt_model/`) | "A person walking down the stairs" | range 0.96 – 0.99 |
 | `dynamic_degree` | How much motion is in the video? (higher = more motion, NOT correlated to quality) | RAFT optical-flow magnitude on subject region | RAFT (`raft-things.pth`, in `pretrained/raft_model/`) | "A car racing on a track" | range 0.40 – 0.95 (model-dependent; Pika ≈ 0.42, Gen-2 ≈ 0.20) |
-| `aesthetic_quality` | Frame-level aesthetic score | LAION-Aesthetic-V1 linear predictor on CLIP-ViT-L/14 features | CLIP ViT-L/14 (`ViT-L-14.pt`) + `sa_0_4_vit_l_14_linear.pth` | "Cinematic shot of a misty forest at dawn" | range 0.55 – 0.70 normalized; our pangu run on 141 videos = 0.6310 |
+| `aesthetic_quality` | Frame-level aesthetic score | LAION-Aesthetic-V1 linear predictor on CLIP-ViT-L/14 features | CLIP ViT-L/14 (`ViT-L-14.pt`) + `sa_0_4_vit_l_14_linear.pth` | "Cinematic shot of a misty forest at dawn" | range 0.55 – 0.70 normalized; our custom-model run on 141 videos = 0.6310 |
 | `imaging_quality` | Frame-level perceptual quality | MUSIQ — multi-scale ViT for image quality | `musiq_spaq_ckpt.pth` | "A photo of a beach" | range 0.55 – 0.75 |
 | `object_class` | Is the named object present? | GRiT region tag → match against prompt's object | GRiT (`grit_b_densecap_objectdet.pth`) | "A cat is sleeping" — `auxiliary_info.object = "cat"` | binary present/absent → 0 or 1 per video, dim mean reported |
 | `multiple_objects` | Are all named objects present together? | GroundingDINO open-vocab detection on all objects | `groundingdino_swint_ogc.pth` | "A red apple and a blue cup on a table" — objects = `["apple","cup"]` | 0 / 1 per video; depends on counting accuracy |
@@ -382,7 +382,7 @@ Workspace: `validation/leaderboard_runs/vbench_run/ws_<dim>/`. Sweep totals: 6,8
 
 | Category | Dimension | What is evaluated | Method | Pretrained checkpoint | Example prompt | Expected result 📋 |
 |---|---|---|---|---|---|---|
-| Human Fidelity | `Human_Anatomy` | Are human bodies anatomically plausible (no extra fingers, no bending joints wrongly)? | LLaVA-Video judging on rubric questions | `lmms-lab/LLaVA-Video-7B-Qwen2` | "A close-up of a person waving their hand" | 0 – 1; pangu pilot = 0.9628 (one model only, pipeline proven) |
+| Human Fidelity | `Human_Anatomy` | Are human bodies anatomically plausible (no extra fingers, no bending joints wrongly)? | LLaVA-Video judging on rubric questions | `lmms-lab/LLaVA-Video-7B-Qwen2` | "A close-up of a person waving their hand" | 0 – 1; custom-model pilot = 0.9628 (one model only, pipeline proven) |
 | Human Fidelity | `Human_Identity` | Does the same person's face persist across frames? | RetinaFace + face-id embedding consistency | RetinaFace + ArcFace | "An interview shot of a journalist" | 0 – 1 |
 | Human Fidelity | `Human_Clothes` | Does clothing stay consistent? | LLaVA-Video on rubric (with content filter) | LLaVA-Video-7B | "A person walking in a red coat" | 0 – 1 |
 | Human Fidelity | `Human_Interaction` | Are human-human interactions plausible? | LLaVA-Video | LLaVA-Video-7B | "Two people shaking hands" | 0 – 1 |
@@ -546,7 +546,7 @@ The order matches the PHAS weight vector (`src/videvalkit/benchmarks/worldjen/di
 
 | Macro-category | Dimension | What is evaluated | Method | Pretrained checkpoint | Example prompt | Expected (1–5 scale) |
 |---|---|---|---|---|---|---|
-| motion_stability | `subject_consistency` | Does the main subject stay coherent across frames? | VLM judge on rubric | Gemma-4-31B-IT (local) | "A panda walking in bamboo forest" | 3 – 5; pangu run = 3.6 – 4.2 |
+| motion_stability | `subject_consistency` | Does the main subject stay coherent across frames? | VLM judge on rubric | Gemma-4-31B-IT (local) | "A panda walking in bamboo forest" | 3 – 5; custom-model run = 3.6 – 4.2 |
 | motion_stability | `scene_consistency` | Is the scene stable? | VLM judge | Gemma-4-31B-IT | "A river running through a canyon" | 3 – 5 |
 | motion_stability | `motion_smoothness` | Is motion continuous, no jumps? | VLM judge | Gemma-4-31B-IT | "A person walking down stairs" | 3 – 5 |
 | motion_stability | `temporal_flickering` | Is the video flicker-free? | VLM judge | Gemma-4-31B-IT | "A still photo of a coffee cup" | 4 – 5 |
@@ -1119,7 +1119,7 @@ A VLM-as-judge prompt-following evaluation. 21 narrow axes + a holistic `overall
 | | |
 |---|---|
 | Prompts | curated from the T2V prompt-tag table; each prompt carries a `dimensions` list = the axes in scope for it |
-| Reference videos | `videogenevalkit/smoke-data` → `semantics_axis/` — 9 prompts × 3 models (pangu3, wan14b, seedance20) = 27 videos, covering all 21 axes |
+| Reference videos | `videogenevalkit/smoke-data` → `semantics_axis/` — 9 prompts × 3 models (custom, wan14b, seedance20) = 27 videos, covering all 21 axes |
 | Scale | 1-5 integer per axis |
 
 **Aggregation**
@@ -1128,7 +1128,7 @@ A VLM-as-judge prompt-following evaluation. 21 narrow axes + a holistic `overall
 
 **Validation test results (2026-05-21)**
 
-Full 21-axis run, model `pangu3`, 9 videos, judge `gemma-4-31b-local`:
+Full 21-axis run, model `custom`, 9 videos, judge `gemma-4-31b-local`:
 
 | | Value |
 |---|---|
@@ -1138,7 +1138,7 @@ Full 21-axis run, model `pangu3`, 9 videos, judge `gemma-4-31b-local`:
 | Headline (mean across axes) | ≈ 4.35 / 5 |
 | per_group | entity 4.24 · spatial 5.00 · event 4.40 · cinematic 3.88 · modifier 5.00 · overall 4.56 |
 
-Per-axis spot values (pangu3): `text_ocr` 1.0 and `action` 2.0 are genuine low scores; `camera_motion` 2.75; most entity/event axes 4-5. pytest registration + prompt-loading: **62/62 passed**. The integration is also verified as a fresh-clone install (`videvalkit list benchmarks` shows `semantics_axis · 21 · gemma-4-31b-local`).
+Per-axis spot values (custom): `text_ocr` 1.0 and `action` 2.0 are genuine low scores; `camera_motion` 2.75; most entity/event axes 4-5. pytest registration + prompt-loading: **62/62 passed**. The integration is also verified as a fresh-clone install (`videvalkit list benchmarks` shows `semantics_axis · 21 · gemma-4-31b-local`).
 
 **Known limitations**
 
