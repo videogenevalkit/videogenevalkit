@@ -29,6 +29,7 @@ def run(
     models: list[str] | None = None,
     dimensions: list[str] | None = None,
     judge: str | None = None,
+    judge_override: dict[str, Any] | None = None,
     aggregator: str | None = None,
     scheduler_config: SchedulerConfig | None = None,
     **adapter_kwargs: Any,
@@ -37,15 +38,21 @@ def run(
 
     Returns a dict with keys: ``summary`` (Summary), ``raw_paths`` (list[str]),
     ``workspace`` (str).
+
+    ``judge_override`` is an ad-hoc judge config dict that bypasses the registry
+    (used by CLI ``--judge-endpoint`` / ``--judge-model`` / ``--judge-kind``).
+    Mutually exclusive with ``judge``.
     """
     if benchmark not in SUPPORTED_BENCHMARKS:
         raise KeyError(f"unknown benchmark {benchmark!r}; known: {list(SUPPORTED_BENCHMARKS)}")
     bench_cfg = SUPPORTED_BENCHMARKS[benchmark]
 
     # Judge resolution: "paper" / "default" / "<name>" / None → concrete cfg dict.
-    # See docs/JUDGE_SELECTION_DESIGN.md §3.
+    # ad-hoc judge_override bypasses the registry. See JUDGE_SELECTION_DESIGN §3.
     from videvalkit.configs.judge_loader import resolve_judge
-    judge_cfg = resolve_judge(benchmark=benchmark, judge_name=judge)
+    judge_cfg = resolve_judge(
+        benchmark=benchmark, judge_name=judge, judge_override=judge_override
+    )
 
     aggregator_name = aggregator or bench_cfg["default_aggregator"]
     if aggregator_name not in SUPPORTED_AGGREGATORS:

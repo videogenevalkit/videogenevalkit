@@ -161,6 +161,17 @@ def prepare_workspace_cmd(workspace: Path, videos: Path) -> None:
               help=("Judge name from SUPPORTED_JUDGES (incl. user yaml), "
                     "or semantic keyword: \"paper\" / \"default\". "
                     "See docs/JUDGE_SELECTION_DESIGN.md §3."))
+@click.option("--judge-endpoint", default=None,
+              help="Ad-hoc judge endpoint base URL (e.g. http://10.0.0.5:8003/v1). "
+                   "Bypasses the registry; pair with --judge-model / --judge-kind. "
+                   "Mutually exclusive with --judge.")
+@click.option("--judge-model", default=None,
+              help="Ad-hoc judge model id (required with --judge-endpoint).")
+@click.option("--judge-kind", default=None,
+              type=click.Choice(["openai_compatible", "gemini", "anthropic"]),
+              help="Ad-hoc judge backend (default: openai_compatible).")
+@click.option("--judge-api-key-env", default=None,
+              help="Env var holding the bearer token for ad-hoc judge (None = local).")
 @click.option("--aggregator", default=None, type=click.Choice(list(SUPPORTED_AGGREGATORS)))
 def eval_cmd(
     benchmark: str,
@@ -169,10 +180,36 @@ def eval_cmd(
     models: tuple[str, ...],
     dimensions: tuple[str, ...],
     judge: str | None,
+    judge_endpoint: str | None,
+    judge_model: str | None,
+    judge_kind: str | None,
+    judge_api_key_env: str | None,
     aggregator: str | None,
 ) -> None:
     """Run a single benchmark on a video folder."""
     from videvalkit.runner import run
+
+    # Build judge_override from ad-hoc flags, if any are set
+    adhoc_flags = (judge_endpoint, judge_model, judge_kind, judge_api_key_env)
+    judge_override = None
+    if any(f is not None for f in adhoc_flags):
+        if judge is not None:
+            raise click.UsageError(
+                "--judge and --judge-endpoint/--judge-model/--judge-kind are "
+                "mutually exclusive. Use --judge <name> OR ad-hoc flags, not both."
+            )
+        if judge_endpoint is None or judge_model is None:
+            raise click.UsageError(
+                "--judge-endpoint and --judge-model must both be supplied "
+                "for an ad-hoc judge."
+            )
+        judge_override = {
+            "kind": judge_kind or "openai_compatible",
+            "endpoint": judge_endpoint,
+            "model": judge_model,
+            "provider": "adhoc",
+            "api_key_env": judge_api_key_env,
+        }
 
     result = run(
         benchmark=benchmark,
@@ -181,6 +218,7 @@ def eval_cmd(
         models=list(models) or None,
         dimensions=list(dimensions) or None,
         judge=judge,
+        judge_override=judge_override,
         aggregator=aggregator,
     )
     click.echo(json.dumps(result, indent=2, ensure_ascii=False, default=str))
