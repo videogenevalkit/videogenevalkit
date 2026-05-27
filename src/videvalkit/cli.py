@@ -191,6 +191,14 @@ def prepare_workspace_cmd(workspace: Path, videos: Path) -> None:
 @click.option("--no-judge", is_flag=True,
               help="Refuse to run any benchmark that needs a VLM/LLM judge. "
                    "Useful for offline / no-API-key workflows.")
+@click.option("--profile", default=None,
+              type=click.Choice(["quick", "standard", "full"]),
+              help="Eval profile: quick [5-10min], standard [30-60min], "
+                   "full [hours, paper-faithful]. Default: full.")
+@click.option("--subset", "subset_path", default=None,
+              type=click.Path(exists=True, path_type=Path),
+              help="Path to a subset JSON file. Overrides the profile's "
+                   "default subset.")
 @click.option("--aggregator", default=None, type=click.Choice(list(SUPPORTED_AGGREGATORS)))
 def eval_cmd(
     benchmark: str,
@@ -204,6 +212,8 @@ def eval_cmd(
     judge_kind: str | None,
     judge_api_key_env: str | None,
     no_judge: bool,
+    profile: str | None,
+    subset_path: Path | None,
     aggregator: str | None,
 ) -> None:
     """Run a single benchmark on a video folder."""
@@ -260,9 +270,76 @@ def eval_cmd(
         dimensions=list(dimensions) or None,
         judge=judge,
         judge_override=judge_override,
+        profile=profile,
+        subset_path=subset_path,
         aggregator=aggregator,
     )
     click.echo(json.dumps(result, indent=2, ensure_ascii=False, default=str))
+
+
+# --------------------------------------------------------------------------- #
+# estimate — read-only cost estimation [QUICK_EVAL_DESIGN §5.3]
+# --------------------------------------------------------------------------- #
+
+@main.command("estimate")
+@click.option("--bench", "benches", required=True, multiple=True,
+              type=click.Choice(list(SUPPORTED_BENCHMARKS)),
+              help="One or more benchmarks (repeat).")
+@click.option("--profile", default="quick",
+              type=click.Choice(["quick", "standard", "full"]),
+              help="Eval profile to estimate cost for. Default: quick.")
+@click.option("--judge", default=None,
+              help="Judge name [for token-cost estimation]. Pricing table in "
+                   "videvalkit.pricing [v0.3 follow-up].")
+@click.option("--n-models", default=1, type=int,
+              help="Number of models to evaluate. Default: 1.")
+def estimate_cmd(
+    benches: tuple[str, ...],
+    profile: str,
+    judge: str | None,
+    n_models: int,
+) -> None:
+    """Estimate wall-clock / GPU-hours / judge-call cost before running.
+
+    Read-only — does NOT execute any benchmark. Aggregates profile.estimated
+    fields × n_models × len(benches). See QUICK_EVAL_DESIGN.md §5.3.
+    """
+    from videvalkit.core.profile import resolve_profile
+
+    spec = resolve_profile(profile)
+    click.echo(f"Estimating: {len(benches)} bench(es) × {n_models} model(s) "
+               f"× profile={profile!r}")
+    click.echo()
+    click.echo(f"  {'Benchmark':<16}  {'Judge?':<7}  {'Wallclock':>12}  "
+               f"{'GPU-h':>8}  {'Judge calls':>12}")
+    click.echo("  " + "-" * 64)
+
+    total_wall = 0.0
+    total_gpu = 0.0
+    total_calls = 0
+    for b in benches:
+        bcfg = SUPPORTED_BENCHMARKS[b]
+        needs_j = bcfg.get("needs_judge", False)
+        per_b_wall = spec.estimated.wallclock_min * n_models
+        per_b_gpu = spec.estimated.gpu_hours * n_models
+        per_b_calls = spec.estimated.judge_calls * n_models if needs_j else 0
+        total_wall += per_b_wall
+        total_gpu += per_b_gpu
+        total_calls += per_b_calls
+        click.echo(f"  {b:<16}  {'VLM' if needs_j else '—':<7}  "
+                   f"{per_b_wall:>10.1f} min  {per_b_gpu:>7.2f}  "
+                   f"{per_b_calls:>12}")
+
+    click.echo("  " + "-" * 64)
+    click.echo(f"  {'TOTAL':<16}  {'':<7}  "
+               f"{total_wall:>10.1f} min  {total_gpu:>7.2f}  {total_calls:>12}")
+    if judge:
+        click.echo()
+        click.echo(f"  Judge: {judge}  [token cost estimation in v0.3 follow-up]")
+    click.echo()
+    click.echo("  Note: these are profile-level estimates. Actual wallclock "
+               "varies with GPU, video length, network. See "
+               "QUICK_EVAL_DESIGN.md §5.3.")
 
 
 # --------------------------------------------------------------------------- #
