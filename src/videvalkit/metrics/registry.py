@@ -113,4 +113,42 @@ SUPPORTED_METRICS: dict[str, dict[str, Any]] = {
         experimental=True,
         notes="Experimental: not comparable to FVD (different feature space).",
     ),
+
+    # ============================================================
+    # Text-video alignment (2 of 14) — judge-free, needs CLIP/ViCLIP backbone
+    # ============================================================
+    "clip-score": dict(
+        kind="per_prompt_reference_free",
+        source="canonical/new",
+        cls="videvalkit.metrics.clip_score:CLIPScore",
+        canonical_backbone="clip-vit-l14",
+        supported_backbones=["clip-vit-l14", "clip-vit-b16"],
+        inputs=["videos", "prompts"],
+        output_kind="scalar_per_pair",
+        needs_judge=False,
+        compute_kind="local_vision",
+        tags=["align.text2video"],
+        algorithm="Per-frame CLIP-ViT-L/14 image-text cosine, averaged across frames",
+        paper_alignment_test=None,
+        license="MIT (openai-clip)",
+        version="1.0",
+    ),
+    "viclip-score": dict(
+        kind="per_prompt_reference_free",
+        source="canonical/new",
+        cls="videvalkit.metrics.viclip_score:ViCLIPScore",
+        canonical_backbone="viclip-l",
+        supported_backbones=["viclip-l"],
+        inputs=["videos", "prompts"],
+        output_kind="scalar_per_pair",
+        needs_judge=False,
+        compute_kind="local_vision",
+        tags=["align.text2video", "align.prompt_following"],
+        algorithm="Per-clip ViCLIP video-text cosine over 16-frame clip",
+        paper_alignment_test=None,
+        license="MIT",
+        version="0.1",
+        notes="ViCLIP trained on video-text pairs; more accurate than per-frame CLIP for T2V.",
+    ),
+
 }
