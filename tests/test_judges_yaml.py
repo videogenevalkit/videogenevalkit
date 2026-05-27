@@ -278,4 +278,4 @@ def test_supported_judges_has_builtin_entries(monkeypatch: pytest.MonkeyPatch):
     assert "gemma-4-31b-local" in _configs.SUPPORTED_JUDGES
     assert "claude-sonnet-4-6" in _configs.SUPPORTED_JUDGES
     assert "gpt-4o" in _configs.SUPPORTED_JUDGES
-    assert len(_configs.SUPPORTED_JUDGES) == 8
+    assert len(_configs.SUPPORTED_JUDGES) >= 8  # 8 builtin + paper aliases added later
