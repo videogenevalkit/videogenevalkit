@@ -157,7 +157,10 @@ def prepare_workspace_cmd(workspace: Path, videos: Path) -> None:
 @click.option("--workspace", required=True, type=click.Path(path_type=Path))
 @click.option("--models", multiple=True, help="Model names to evaluate (repeat).")
 @click.option("--dimensions", multiple=True, help="Subset of dimensions to run (repeat). Default: all.")
-@click.option("--judge", default=None, type=click.Choice(list(SUPPORTED_JUDGES)))
+@click.option("--judge", default=None,
+              help=("Judge name from SUPPORTED_JUDGES (incl. user yaml), "
+                    "or semantic keyword: \"paper\" / \"default\". "
+                    "See docs/JUDGE_SELECTION_DESIGN.md §3."))
 @click.option("--aggregator", default=None, type=click.Choice(list(SUPPORTED_AGGREGATORS)))
 def eval_cmd(
     benchmark: str,

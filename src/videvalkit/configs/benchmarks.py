@@ -30,6 +30,7 @@ SUPPORTED_BENCHMARKS = {
         needs_gpu=True,
         needs_judge=True,
         default_judge="local-llava-video-7b",
+        paper_judge="local-llava-video-7b",
         default_aggregator="vbench2_category",
     ),
     "videobench": dict(
@@ -38,6 +39,7 @@ SUPPORTED_BENCHMARKS = {
         needs_gpu=False,
         needs_judge=True,
         default_judge="gpt-4o",
+        paper_judge="gpt-4o",
         default_aggregator="weighted_sum",
     ),
     "worldjen": dict(
@@ -46,6 +48,7 @@ SUPPORTED_BENCHMARKS = {
         needs_gpu=False,
         needs_judge=True,
         default_judge="gemma-4-31b-local",
+        paper_judge="gemma-4-31b-local",
         default_aggregator="phas",
     ),
     "t2vcompbench": dict(
@@ -54,6 +57,7 @@ SUPPORTED_BENCHMARKS = {
         needs_gpu=True,                # GroundingDINO / Depth / SAM
         needs_judge=True,              # LLaVA-Video for 4 of 7 dims
         default_judge="local-llava-video-7b",
+        paper_judge="paper-llava-1.6-34b",
         default_aggregator="weighted_sum",
     ),
     "physics_iq": dict(
@@ -69,6 +73,7 @@ SUPPORTED_BENCHMARKS = {
         needs_gpu=True,
         needs_judge=True,              # I2V + Trustworthiness use a VLM
         default_judge="local-llava-video-7b",
+        paper_judge="local-llava-video-7b",
         default_aggregator="vbench_weighted",
     ),
     "v_reasonbench": dict(
@@ -91,6 +96,7 @@ SUPPORTED_BENCHMARKS = {
         needs_gpu=False,               # VLM-judge only, no local CV checkpoints
         needs_judge=True,
         default_judge="gemma-4-31b-local",
+        paper_judge="gemma-4-31b-local",
         default_aggregator="weighted_sum",
     ),
 }

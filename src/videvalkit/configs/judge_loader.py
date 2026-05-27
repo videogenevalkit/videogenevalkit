@@ -143,3 +143,98 @@ def get_judges(
     merged = dict(builtin)
     merged.update(load_user_judges())
     return merged
+
+
+def resolve_judge(
+    benchmark: str,
+    judge_name: str | None = None,
+    judge_override: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """Resolve the ``--judge`` argument to a concrete judge config dict.
+
+    Per docs/JUDGE_SELECTION_DESIGN.md §3:
+
+    +----------------------+---------------------------------------------+
+    | ``judge_name``       | resolves to                                 |
+    +======================+=============================================+
+    | ``None``             | benchmark's ``default_judge`` (back-compat) |
+    | ``"default"``        | benchmark's ``default_judge`` (explicit)    |
+    | ``"paper"``          | benchmark's ``paper_judge`` (★ new in M-alias) |
+    | ``"<registry name>"``| direct lookup in merged ``SUPPORTED_JUDGES``|
+    | (``judge_override``) | use that dict verbatim, bypass registry     |
+    +----------------------+---------------------------------------------+
+
+    Returns ``None`` for benchmarks where ``needs_judge=False`` and the user
+    did not pass anything. Raises ``ValueError`` / ``KeyError`` for
+    unresolvable inputs (with suggestions where helpful).
+    """
+    # Lazy import avoids circular dep with configs/__init__.py
+    from videvalkit.configs.benchmarks import SUPPORTED_BENCHMARKS
+
+    if judge_override is not None:
+        # ad-hoc endpoint via CLI flags; trust the caller's dict
+        return judge_override
+
+    if benchmark not in SUPPORTED_BENCHMARKS:
+        raise KeyError(
+            f"unknown benchmark {benchmark!r}; "
+            f"known: {sorted(SUPPORTED_BENCHMARKS)}"
+        )
+    bench_cfg = SUPPORTED_BENCHMARKS[benchmark]
+    needs_judge = bench_cfg.get("needs_judge", False)
+
+    # No judge needed and none requested
+    if not needs_judge and not judge_name:
+        return None
+
+    judges = get_judges()
+
+    # Semantic keyword: "paper"
+    if judge_name == "paper":
+        paper_j = bench_cfg.get("paper_judge")
+        if paper_j is None:
+            raise ValueError(
+                f"benchmark {benchmark!r} has no paper_judge declared. "
+                f"Available for this bench: default={bench_cfg.get('default_judge')!r}"
+            )
+        if paper_j not in judges:
+            raise ValueError(
+                f"benchmark {benchmark!r} paper_judge={paper_j!r} not found "
+                f"in registry (built-in + user yaml)."
+            )
+        return judges[paper_j]
+
+    # Semantic keyword: "default"
+    if judge_name == "default":
+        default_j = bench_cfg.get("default_judge")
+        if default_j is None:
+            raise ValueError(
+                f"benchmark {benchmark!r} has no default_judge declared"
+            )
+        return judges[default_j]
+
+    # No keyword → fall back to bench default
+    if judge_name is None:
+        default_j = bench_cfg.get("default_judge")
+        if default_j is None:
+            if needs_judge:
+                raise ValueError(
+                    f"benchmark {benchmark!r} needs a judge; pass --judge"
+                )
+            return None
+        return judges[default_j]
+
+    # Direct registry lookup
+    if judge_name not in judges:
+        from difflib import get_close_matches
+        suggestions = get_close_matches(judge_name, list(judges), n=3)
+        msg = f"unknown judge {judge_name!r}"
+        if suggestions:
+            msg += f"; did you mean: {', '.join(suggestions)}?"
+        msg += (
+            f"\n  available: {sorted(judges)[:10]}"
+            f"{'...' if len(judges) > 10 else ''}"
+            f"\n  Add custom endpoints in ~/.config/videvalkit/judges.yaml"
+        )
+        raise KeyError(msg)
+    return judges[judge_name]

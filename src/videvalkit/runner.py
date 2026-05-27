@@ -42,10 +42,10 @@ def run(
         raise KeyError(f"unknown benchmark {benchmark!r}; known: {list(SUPPORTED_BENCHMARKS)}")
     bench_cfg = SUPPORTED_BENCHMARKS[benchmark]
 
-    judge_name = judge or bench_cfg.get("default_judge")
-    if bench_cfg["needs_judge"] and judge_name is None:
-        raise ValueError(f"{benchmark} requires a judge; none supplied")
-    judge_cfg = SUPPORTED_JUDGES[judge_name] if judge_name else None
+    # Judge resolution: "paper" / "default" / "<name>" / None → concrete cfg dict.
+    # See docs/JUDGE_SELECTION_DESIGN.md §3.
+    from videvalkit.configs.judge_loader import resolve_judge
+    judge_cfg = resolve_judge(benchmark=benchmark, judge_name=judge)
 
     aggregator_name = aggregator or bench_cfg["default_aggregator"]
     if aggregator_name not in SUPPORTED_AGGREGATORS:

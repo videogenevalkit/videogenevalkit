@@ -69,4 +69,12 @@ SUPPORTED_JUDGES = {
         provider="openai",
         api_key_env="OPENAI_API_KEY",
     ),
+    # ---- paper-faithful aliases (used by --judge paper) -----------------------
+    "paper-llava-1.6-34b": dict(
+        kind="openai_compatible",
+        endpoint="http://localhost:8007/v1",
+        model="liuhaotian/llava-v1.6-34b",
+        provider="liuhaotian",
+        api_key_env=None,
+    ),
 }
