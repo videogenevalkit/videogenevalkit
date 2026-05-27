@@ -23,27 +23,39 @@ def main() -> None:
 
 @main.command("list")
 @click.argument("kind", type=click.Choice(["benchmarks", "judges", "aggregators"]))
-def list_cmd(kind: str) -> None:
+@click.option("--no-judge", is_flag=True,
+              help="Filter to entries that don't need a VLM/LLM judge "
+                   "(useful if you don't have a judge endpoint set up). "
+                   "See docs/JUDGE_SELECTION_DESIGN.md §5.3.")
+def list_cmd(kind: str, no_judge: bool) -> None:
     """List registered benchmarks / judges / aggregators."""
     if kind == "benchmarks":
-        _list_benchmarks()
+        _list_benchmarks(no_judge=no_judge)
         return
-    registry = {
-        "judges": SUPPORTED_JUDGES,
-        "aggregators": SUPPORTED_AGGREGATORS,
-    }[kind]
+    if kind == "judges":
+        # --no-judge on the judges list is nonsensical; show all
+        if no_judge:
+            click.echo("note: --no-judge has no effect on `list judges`")
+        registry = SUPPORTED_JUDGES
+    else:  # aggregators
+        registry = SUPPORTED_AGGREGATORS
     for name, cfg in registry.items():
         click.echo(f"{name:30s} {cfg}")
 
 
-def _list_benchmarks() -> None:
+def _list_benchmarks(no_judge: bool = False) -> None:
     """Pretty-print the benchmark registry with dim counts and superset hints."""
-    # Column header
+    # Column header — add judge? column for transparency
     click.echo(f"{'name':<16}  {'#dims':>5}  {'gpu':<4}  "
-               f"{'judge':<25}  notes")
-    click.echo("-" * 78)
+               f"{'judge?':<7}  {'default_judge':<25}  notes")
+    click.echo("-" * 88)
+    skipped = 0
     for name in SUPPORTED_BENCHMARKS:
         cfg = SUPPORTED_BENCHMARKS[name]
+        needs_judge = cfg.get("needs_judge", False)
+        if no_judge and needs_judge:
+            skipped += 1
+            continue
         cls = cfg["cls"]
         # vbench2 lazy-loads dimensions; pull canonical list as fallback.
         n_dims = len(cls.dimensions)
@@ -54,13 +66,17 @@ def _list_benchmarks() -> None:
             except Exception:
                 pass
         gpu = "yes" if cfg.get("needs_gpu") else "no"
-        judge = cfg.get("default_judge", "-") if cfg.get("needs_judge") else "-"
+        judge_mark = "VLM" if needs_judge else "—"
+        judge = cfg.get("default_judge", "—") if needs_judge else "—"
         rel = BENCHMARK_RELATIONS.get(name, {})
         notes: list[str] = []
         if "superset_of" in rel:
             notes.append(f"⊃ {rel['superset_of']}")
-        click.echo(f"{name:<16}  {n_dims:>5}  {gpu:<4}  {judge:<25}  "
-                   f"{', '.join(notes)}")
+        click.echo(f"{name:<16}  {n_dims:>5}  {gpu:<4}  {judge_mark:<7}  "
+                   f"{judge:<25}  {', '.join(notes)}")
+    if no_judge and skipped:
+        click.echo(f"\n  [{skipped} bench filtered out: needs VLM/LLM judge. "
+                   f"Drop --no-judge to see them.]")
 
 
 @main.command("doctor")
@@ -172,6 +188,9 @@ def prepare_workspace_cmd(workspace: Path, videos: Path) -> None:
               help="Ad-hoc judge backend (default: openai_compatible).")
 @click.option("--judge-api-key-env", default=None,
               help="Env var holding the bearer token for ad-hoc judge (None = local).")
+@click.option("--no-judge", is_flag=True,
+              help="Refuse to run any benchmark that needs a VLM/LLM judge. "
+                   "Useful for offline / no-API-key workflows.")
 @click.option("--aggregator", default=None, type=click.Choice(list(SUPPORTED_AGGREGATORS)))
 def eval_cmd(
     benchmark: str,
@@ -184,10 +203,32 @@ def eval_cmd(
     judge_model: str | None,
     judge_kind: str | None,
     judge_api_key_env: str | None,
+    no_judge: bool,
     aggregator: str | None,
 ) -> None:
     """Run a single benchmark on a video folder."""
     from videvalkit.runner import run
+
+    # --no-judge: fail-fast if bench needs judge
+    bench_cfg = SUPPORTED_BENCHMARKS[benchmark]
+    if no_judge:
+        if bench_cfg.get("needs_judge", False):
+            judge_free = [
+                n for n, c in SUPPORTED_BENCHMARKS.items()
+                if not c.get("needs_judge", False)
+            ]
+            raise click.UsageError(
+                f"--no-judge: benchmark {benchmark!r} requires a VLM/LLM judge "
+                f"and cannot run in judge-free mode.\n"
+                f"  Judge-free benches: {judge_free}\n"
+                f"  Or drop --no-judge and pass --judge <name>."
+            )
+        if judge is not None or any(
+            f is not None for f in (judge_endpoint, judge_model, judge_kind, judge_api_key_env)
+        ):
+            raise click.UsageError(
+                "--no-judge is mutually exclusive with --judge / --judge-endpoint."
+            )
 
     # Build judge_override from ad-hoc flags, if any are set
     adhoc_flags = (judge_endpoint, judge_model, judge_kind, judge_api_key_env)
