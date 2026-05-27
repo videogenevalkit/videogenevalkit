@@ -1,0 +1,54 @@
+# Example: ~/.config/videvalkit/judges.yaml
+#
+# Drop this file at ~/.config/videvalkit/judges.yaml to add your own judge
+# endpoints WITHOUT editing the toolkit source.
+#
+# Same schema as videvalkit.configs.judges.SUPPORTED_JUDGES (see also
+# docs/JUDGE_SELECTION_DESIGN.md §4.2).
+#
+# Conventions:
+#   * kind         : openai_compatible | gemini | anthropic
+#   * endpoint     : base URL ending in "/v1" (required for openai_compatible;
+#                    leave unset for gemini/anthropic SDK paths)
+#   * model        : model id as the endpoint expects
+#   * provider     : free-form tag, used by ApiCallLogger for partitioning
+#   * api_key_env  : env var holding the bearer token; null/omit for local
+#   * (extra fields are allowed and passed through to the scorer kwargs)
+#
+# Entries with the same name as a built-in (e.g. "gpt-4o") fully REPLACE
+# the built-in entry. No field-level deep merge.
+#
+# To temporarily disable user yaml loading, set VIDEVALKIT_JUDGE_USER_YAML=0
+# in the environment.
+
+judges:
+  # An internal private Claude proxy that speaks Anthropic SDK protocol
+  my-internal-claude:
+    kind: anthropic
+    model: claude-sonnet-4-6
+    provider: anthropic
+    api_key_env: MY_INTERNAL_ANTHROPIC_KEY
+
+  # A self-deployed Qwen3-VL on a cluster
+  my-cluster-qwen3-vl:
+    kind: openai_compatible
+    endpoint: http://10.20.30.40:8005/v1
+    model: Qwen/Qwen3-VL-32B-Instruct
+    provider: Qwen
+    api_key_env: null
+
+  # Doubao (字节豆包) — OpenAI-compatible via Volcengine ARK
+  doubao-pro:
+    kind: openai_compatible
+    endpoint: https://ark.cn-beijing.volces.com/api/v3
+    model: doubao-pro-32k
+    provider: bytedance
+    api_key_env: ARK_API_KEY
+
+  # Same name as a built-in entry → replaces the built-in
+  gpt-4o:
+    kind: openai_compatible
+    endpoint: https://my-azure-openai.example.com/openai/deployments/gpt-4o/chat/completions
+    model: gpt-4o-2024-11-20
+    provider: azure
+    api_key_env: AZURE_OPENAI_KEY
