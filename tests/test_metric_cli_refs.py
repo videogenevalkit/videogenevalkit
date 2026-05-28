@@ -146,3 +146,30 @@ class TestRefsCLI:
         ])
         assert result.exit_code == 0, result.output
         assert "registered" in result.output
+
+
+class TestFetchRefs:
+    def test_no_args_is_usage_error(self, cli_runner):
+        result = cli_runner.invoke(main, ["fetch-refs"])
+        assert result.exit_code != 0
+        assert "--name" in result.output or "--all" in result.output
+
+    def test_unknown_name_is_usage_error(self, cli_runner):
+        result = cli_runner.invoke(main, ["fetch-refs", "--name", "no-such-ref"])
+        assert result.exit_code != 0
+        assert "unknown built-in ref" in result.output
+
+    def test_all_dry_run_lists_every_builtin(self, cli_runner):
+        result = cli_runner.invoke(main, ["fetch-refs", "--all", "--dry-run"])
+        assert result.exit_code == 0, result.output
+        for name in BUILTIN_REFS:
+            assert name in result.output
+
+    def test_single_name_dry_run(self, cli_runner):
+        result = cli_runner.invoke(
+            main, ["fetch-refs", "--name", "ucf101-fvd", "--dry-run"]
+        )
+        assert result.exit_code == 0, result.output
+        assert "ucf101-fvd" in result.output
+        # dry-run must not create the cache dir or download
+        assert "✓ refs fetched" not in result.output
