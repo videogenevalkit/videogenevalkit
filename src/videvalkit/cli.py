@@ -343,6 +343,82 @@ def estimate_cmd(
 
 
 # --------------------------------------------------------------------------- #
+# capabilities — list / show capability tags + their contributors
+# (per CAPABILITY_TAGS_DESIGN.md §7)
+# --------------------------------------------------------------------------- #
+
+@main.group("capabilities")
+def capabilities_group() -> None:
+    """Inspect capability tags + the metrics/bench-dims that contribute."""
+
+
+@capabilities_group.command("list")
+@click.option("--show-sub", is_flag=True,
+              help="Also list sub-tags under each top-level. Default: top-level only.")
+def capabilities_list_cmd(show_sub: bool) -> None:
+    """List all capability tags + how many contributors each has."""
+    from videvalkit.configs.capability_taxonomy import (
+        SUB_TAGS_BY_TOP, TOP_LEVEL_TAGS,
+    )
+    from videvalkit.core.capability import coverage_report
+
+    coverage = coverage_report()
+    click.echo(f"{'capability':<28} {'contributors':>14}")
+    click.echo("-" * 46)
+    for top in TOP_LEVEL_TAGS:
+        n_top = len(coverage.get(top, []))
+        # Sum across all subs too for top-level rollup
+        n_total = n_top + sum(
+            len(coverage.get(s, [])) for s in SUB_TAGS_BY_TOP[top]
+        )
+        click.echo(f"{top:<28} {n_total:>14}")
+        if show_sub:
+            for sub in SUB_TAGS_BY_TOP[top]:
+                n_sub = len(coverage.get(sub, []))
+                click.echo(f"  {sub:<26} {n_sub:>14}")
+
+
+@capabilities_group.command("show")
+@click.argument("capability")
+def capabilities_show_cmd(capability: str) -> None:
+    """Show the contributors covering a specific capability tag.
+
+    capability can be a top-level [e.g. "motion"] OR a sub-tag [e.g.
+    "motion.smoothness"]. Top-level matches expand to all sub-tags.
+    """
+    from videvalkit.configs.capability_taxonomy import (
+        TAG_DESCRIPTIONS, expand_capability, is_valid_tag,
+    )
+    from videvalkit.core.capability import resolve_capability
+
+    if not is_valid_tag(capability):
+        click.echo(f"ERROR: unknown capability {capability!r}", err=True)
+        click.echo("Run `videvalkit capabilities list` for the controlled vocab.", err=True)
+        raise SystemExit(2)
+
+    desc = TAG_DESCRIPTIONS.get(capability, "")
+    click.echo(f"{capability}")
+    if desc:
+        click.echo(f"  {desc}")
+    expanded = expand_capability(capability)
+    if len(expanded) > 1:
+        click.echo(f"  expands to: {expanded}")
+    click.echo()
+
+    contributors = resolve_capability(capability)
+    if not contributors:
+        click.echo("  [no contributors yet — metric/bench-dim registry doesn't "
+                   "tag any entry with this capability]")
+        return
+
+    click.echo(f"  {'source_kind':<12}  {'name':<40}  {'tags'}")
+    click.echo("  " + "-" * 78)
+    for c in contributors:
+        tags_str = ", ".join(c.tags)
+        click.echo(f"  {c.source_kind:<12}  {c.source_name:<40}  {tags_str}")
+
+
+# --------------------------------------------------------------------------- #
 # fetch-smoke-data — pull videogenevalkit/smoke-data from HuggingFace
 # --------------------------------------------------------------------------- #
 
