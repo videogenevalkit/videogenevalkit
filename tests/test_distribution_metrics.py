@@ -134,11 +134,13 @@ class TestComputeShell:
                 ref_videos=[tmp_path / f"r{i}.mp4" for i in range(2048)],
             )
 
-    def test_fvd_compute_with_200_videos_reaches_not_implemented(self, tmp_path):
-        """200 videos > min_recommended (100), so we get past the size guard
-        and hit the NotImplementedError from the missing backbone."""
+    def test_fvd_compute_with_200_videos_past_size_guard(self, tmp_path, monkeypatch):
+        """200 videos > min_recommended (100), so past the size guard. Default
+        i3d-k400 backbone then raises FileNotFoundError [weights not placed]."""
+        monkeypatch.delenv("VIDEVALKIT_FVD_I3D_PATH", raising=False)
+        monkeypatch.setenv("VIDEVALKIT_CACHE_HOME", str(tmp_path / "nocache"))
         m = get_metric("fvd")
-        with pytest.raises(NotImplementedError, match="backbone fetch|checkpoint"):
+        with pytest.raises(FileNotFoundError, match="s3d-k400|i3d_torchscript"):
             m.compute(
                 gen_videos=[tmp_path / f"v{i}.mp4" for i in range(200)],
                 ref_videos=[tmp_path / f"r{i}.mp4" for i in range(2048)],
