@@ -623,6 +623,51 @@ def capabilities_show_cmd(capability: str) -> None:
         click.echo(f"  {c.source_kind:<12}  {c.source_name:<40}  {tags_str}")
 
 
+@capabilities_group.command("eval")
+@click.argument("capability")
+@click.option("--videos", required=True, type=click.Path(exists=True, path_type=Path))
+@click.option("--aggregator", default="mean",
+              type=click.Choice(["mean", "max", "min"]),
+              help="How to combine per-metric normalized scores. Default: mean.")
+@click.option("--device", default="auto",
+              type=click.Choice(["auto", "cuda", "cpu", "npu"]))
+def capabilities_eval_cmd(
+    capability: str, videos: Path, aggregator: str, device: str,
+) -> None:
+    """Run all runnable metrics for a capability on a videos dir [T5].
+
+    Third entry point alongside `eval --bench` and `metric --name`:
+    `videvalkit capabilities eval motion --videos X/` runs every judge-free
+    per-video metric tagged under `motion`, min-max normalizes, aggregates.
+
+    Metrics needing refs / prompts / judge, or shells, are skipped with a
+    reason [use `metric --name` for those].
+    """
+    from videvalkit.core.capability_eval import run_capability
+    from videvalkit.configs.capability_taxonomy import is_valid_tag
+
+    if not is_valid_tag(capability):
+        click.echo(f"ERROR: unknown capability {capability!r}", err=True)
+        raise SystemExit(2)
+
+    result = run_capability(capability, videos, aggregator=aggregator, device=device)
+    click.echo(f"capability: {result.capability}")
+    click.echo(f"score:      {result.score:.4f}  "
+               f"[aggregator={result.aggregator}, "
+               f"{result.n_contributors_run} metric(s) run, "
+               f"{result.n_skipped} skipped]")
+    click.echo()
+    click.echo(f"  {'metric':<28}  {'raw':>8}  {'norm':>6}  status")
+    click.echo("  " + "-" * 60)
+    for c in result.contributors:
+        if c.status == "ok":
+            click.echo(f"  {c.name:<28}  {c.raw_score:>8.4f}  "
+                       f"{c.normalized:>6.3f}  ok")
+        else:
+            click.echo(f"  {c.name:<28}  {'—':>8}  {'—':>6}  "
+                       f"skip: {c.skip_reason}")
+
+
 # --------------------------------------------------------------------------- #
 # fetch-smoke-data — pull videogenevalkit/smoke-data from HuggingFace
 # --------------------------------------------------------------------------- #
