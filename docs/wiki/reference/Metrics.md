@@ -2,7 +2,9 @@
 
 [← Home](../Home.md)
 
-20 standalone metrics in two tiers. **16 functional, 4 not-yet-registered.**
+20 planned standalone metrics in two tiers. **16 run judge-free today**, plus
+`artifact-diagnostic` (registered, runs with a `--judge`). The remaining 3
+specialized dims are available via their bench or deferred — see Tier 2.
 Run any with `videvalkit metric run --name <name>`.
 
 > **Functional** = works today (backbone auto-downloads, is in-env, or wraps a
@@ -61,10 +63,10 @@ Run any with `videvalkit metric run --name <name>`.
 |---|---|---|---|---|
 | `numeracy` | t2vcompbench (GroundingDINO) | no | ✅ functional | comp.numeracy, obj.count |
 | `spatial-relationship` | t2vcompbench (GDINO+Depth) | no | ✅ functional | comp.spatial |
-| `object-binding` | t2vcompbench (MLLM) | yes | ⛔ not registered (judge) | obj.binding, obj.presence |
-| `motion-accuracy` | worldscore (RAFT+GDINO) | no | ⛔ not registered (runner) | motion.accuracy, align.action_verb |
-| `identity-preservation` | ArcFace (new) | no | ⛔ not registered (insightface) | subj.identity, subj.character |
-| `artifact-diagnostic` | Artifact-Bench port | yes | ⛔ not registered (judge+port) | real.artifact_rate, vq.artifact_free |
+| `artifact-diagnostic` | Artifact-Bench port | yes | ✅ registered (needs `--judge`) | vq.artifact_free |
+| `object-binding` | t2vcompbench (MLLM) | yes | ↪ bench-only (`eval --bench t2vcompbench`) | obj.binding, obj.presence |
+| `motion-accuracy` | worldscore (RAFT+SAM2) | yes | ↪ bench-only (`eval --bench worldscore`) | motion.accuracy, align.action_verb |
+| `identity-preservation` | ArcFace (new) | no | ⏳ deferred to i2v phase | subj.identity, subj.character |
 
 ---
 
@@ -72,9 +74,9 @@ Run any with `videvalkit metric run --name <name>`.
 
 | | Meaning |
 |---|---|
-| ✅ functional | runs today |
-| ⚪ shell | registered, `NOT YET FUNCTIONAL`, pending weights/runner |
-| ⛔ not registered | needs an external prereq (judge endpoint / insightface / runner wiring) |
+| ✅ functional | runs today (judge-free, or registered + runs with `--judge`) |
+| ↪ bench-only | prompt/judge-conditioned dim; run it via its benchmark, not as a standalone metric |
+| ⏳ deferred | out of v0.2 scope (revisit in a later phase) |
 
 ---
 

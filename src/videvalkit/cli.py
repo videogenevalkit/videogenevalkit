@@ -721,6 +721,8 @@ def metric_show_cmd(name: str) -> None:
 @click.option("--refs", default=None, help="Named reference set [see refs list].")
 @click.option("--prompts", type=click.Path(exists=True, path_type=Path),
               help="prompts.jsonl for per-prompt metrics.")
+@click.option("--judge", default=None,
+              help="Judge name [see `list judges`] for judge-based metrics.")
 @click.option("--device", default="auto",
               type=click.Choice(["auto", "cuda", "cpu", "npu"]))
 @click.option("--allow-tiny-sample", is_flag=True,
@@ -729,7 +731,7 @@ def metric_show_cmd(name: str) -> None:
 def metric_run_cmd(
     name: str, gen_videos: Path | None, videos: Path | None,
     ref_videos: Path | None, refs: str | None, prompts: Path | None,
-    device: str, allow_tiny_sample: bool, output: Path | None,
+    judge: str | None, device: str, allow_tiny_sample: bool, output: Path | None,
 ) -> None:
     """Run a single metric and print/save its result."""
     from videvalkit.metrics import SUPPORTED_METRICS, get_metric
@@ -774,6 +776,20 @@ def metric_run_cmd(
             for vf, rec in zip(vfiles, recs):
                 vids.append(vf); texts.append(rec.get("text", ""))
             result = m.compute(videos=vids, prompts=texts)
+        elif kind == "per_video_with_vlm_judge":
+            vdir = videos or gen_videos
+            if vdir is None:
+                raise click.UsageError("judge metric needs --videos")
+            if not judge:
+                raise click.UsageError(
+                    f"metric {name!r} needs a judge; pass --judge <name> "
+                    "[see `list judges`]")
+            from videvalkit.configs import SUPPORTED_JUDGES
+            from videvalkit.scorers.vlm_judge import build_judge
+            if judge not in SUPPORTED_JUDGES:
+                raise click.UsageError(f"unknown judge {judge!r} [see `list judges`]")
+            jobj = build_judge(SUPPORTED_JUDGES[judge])
+            result = m.compute(_list_videos(Path(vdir)), judge=jobj)
         else:  # per_video_reference_free
             vdir = videos or gen_videos
             if vdir is None:

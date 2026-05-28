@@ -40,7 +40,7 @@
 
 | Item | Status / blocker |
 |---|---|
-| `artifact-diagnostic` metric | needs a VLM judge endpoint (code + mock landing; runs once an endpoint is configured) |
+| `artifact-diagnostic` metric | ✅ implemented + mock-tested; runs once a `--judge` endpoint is configured. Taxonomy leaves to reconcile vs the paper; full judge-eval bench is v0.3. |
 | `object-binding` | **available via the bench** (`eval --bench t2vcompbench --dimensions consistent_attribute`, MLLM-judged). Not a standalone `--videos` metric — re-wraps the same judge call. |
 | `motion-accuracy` | **available via the bench** (`eval --bench worldscore --dimensions motion_accuracy`). Prompt-conditioned (intended motion direction) → inherently bench-only, not a standalone metric. |
 | `identity-preservation` | **deferred to the i2v phase** — its prime use (reference-image identity match) is i2v-adjacent, out of v0.2 T2V scope. |
@@ -57,6 +57,7 @@ I3D torchscript weight** (→ paper-canonical FVD).
 | | Count | Which |
 |---|---|---|
 | ✅ functional | 16 | fvd, vfid, kvd, clip-fvd, clip-score, viclip-score, 7 vbench lifts, motion-magnitude, numeracy, spatial-relationship |
-| ⛔ not registered | 4 | object-binding, motion-accuracy, identity-preservation, artifact-diagnostic |
+| ✅ registered (needs judge) | 1 | artifact-diagnostic (Artifact-Bench port; runs with `--judge`) |
+| ↪ bench-only / ⏳ deferred | 3 | object-binding, motion-accuracy (via their bench); identity-preservation (deferred to i2v) |
 
 See [Metrics Reference](reference/Metrics.md) for detail.
