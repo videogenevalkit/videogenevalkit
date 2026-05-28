@@ -343,6 +343,159 @@ def estimate_cmd(
 
 
 # --------------------------------------------------------------------------- #
+# eval-suite — run multiple benchmarks in one shared workspace
+# (per QUICK_EVAL_DESIGN.md §5.2)
+# --------------------------------------------------------------------------- #
+
+@main.command("eval-suite")
+@click.option("--bench", "benches", multiple=True,
+              type=click.Choice(list(SUPPORTED_BENCHMARKS)),
+              help="Benchmark to run (repeat). Format also accepts bench=profile.")
+@click.option("--all-anchored", is_flag=True,
+              help="Run all 6 production-ready anchored benchmarks.")
+@click.option("--videos", required=True, type=click.Path(exists=True, path_type=Path))
+@click.option("--workspace", required=True, type=click.Path(path_type=Path))
+@click.option("--models", multiple=True)
+@click.option("--profile", default="standard",
+              type=click.Choice(["quick", "standard", "full"]))
+@click.option("--judge", default=None,
+              help="Judge for all benches [paper / default / <name>].")
+@click.option("--no-judge", is_flag=True,
+              help="Skip benches that need a judge.")
+def eval_suite_cmd(
+    benches: tuple[str, ...],
+    all_anchored: bool,
+    videos: Path,
+    workspace: Path,
+    models: tuple[str, ...],
+    profile: str,
+    judge: str | None,
+    no_judge: bool,
+) -> None:
+    """Run multiple benchmarks into one workspace, then auto-aggregate."""
+    from videvalkit.runner import run
+
+    ANCHORED = ["vbench", "vbench2", "videobench", "worldjen",
+                "worldscore", "t2vcompbench"]
+    selected = list(benches)
+    if all_anchored:
+        selected = ANCHORED
+    if not selected:
+        raise click.UsageError("pass --bench <name> (repeat) or --all-anchored")
+
+    # --no-judge filtering
+    skipped: list[str] = []
+    runnable: list[str] = []
+    for b in selected:
+        if no_judge and SUPPORTED_BENCHMARKS[b].get("needs_judge", False):
+            skipped.append(b)
+        else:
+            runnable.append(b)
+
+    click.echo(f"Running: {runnable}")
+    if skipped:
+        click.echo(f"Skipped [need judge]: {skipped}")
+
+    results: dict[str, object] = {}
+    for b in runnable:
+        click.echo(f"\n=== {b} ===")
+        try:
+            results[b] = run(
+                benchmark=b,
+                videos=videos,
+                workspace=workspace,
+                models=list(models) or None,
+                judge=judge,
+                profile=profile,
+            )
+        except Exception as e:
+            click.echo(f"  ERROR: {e}", err=True)
+            results[b] = {"error": str(e)}
+
+    click.echo(json.dumps(
+        {"benches": runnable, "skipped": skipped,
+         "results": {k: (v if isinstance(v, dict) else str(v)) for k, v in results.items()}},
+        indent=2, ensure_ascii=False, default=str,
+    ))
+
+
+# --------------------------------------------------------------------------- #
+# watch — poll a checkpoint dir, run quick eval on each new model
+# (per QUICK_EVAL_DESIGN.md §5.4)
+# --------------------------------------------------------------------------- #
+
+@main.command("watch")
+@click.option("--videos-pattern", required=True,
+              help="Glob for checkpoint sample dirs, "
+                   "e.g. '/runs/r42/checkpoints/step_*/samples/'.")
+@click.option("--workspace", required=True, type=click.Path(path_type=Path))
+@click.option("--bench", "benches", multiple=True,
+              type=click.Choice(list(SUPPORTED_BENCHMARKS)), required=True)
+@click.option("--profile", default="quick",
+              type=click.Choice(["quick", "standard", "full"]))
+@click.option("--judge", default=None)
+@click.option("--interval", default=60, type=int,
+              help="Poll interval in seconds. Default 60.")
+@click.option("--once", is_flag=True,
+              help="Process current matches once and exit [no polling].")
+def watch_cmd(
+    videos_pattern: str,
+    workspace: Path,
+    benches: tuple[str, ...],
+    profile: str,
+    judge: str | None,
+    interval: int,
+    once: bool,
+) -> None:
+    """Watch a checkpoint dir; run quick eval on each new model as it appears.
+
+    Appends each result to <workspace>/timeline.jsonl. Polling-based [no
+    inotify in v0.2]. Ctrl-C to stop.
+    """
+    import glob
+    import time
+
+    from videvalkit.training import MonitorConfig, monitor
+
+    cfg = MonitorConfig(
+        benches=list(benches), profile=profile, judge=judge,
+        workspace=str(workspace),
+    )
+    seen: set[str] = set()
+    click.echo(f"watch: pattern={videos_pattern!r} benches={list(benches)} "
+               f"profile={profile} interval={interval}s once={once}")
+
+    def _scan_and_run() -> int:
+        n_new = 0
+        for match in sorted(glob.glob(videos_pattern)):
+            if match in seen:
+                continue
+            seen.add(match)
+            model_name = Path(match).parent.name or Path(match).name
+            click.echo(f"\n[watch] new checkpoint: {match} → model={model_name}")
+            try:
+                result = monitor.eval(match, model_name=model_name, cfg=cfg)
+                click.echo(f"  overall={result.overall:.4f}")
+                n_new += 1
+            except Exception as e:
+                click.echo(f"  ERROR: {e}", err=True)
+        return n_new
+
+    if once:
+        n = _scan_and_run()
+        click.echo(f"\nwatch --once: processed {n} checkpoint(s).")
+        return
+
+    click.echo("watch: polling [Ctrl-C to stop] ...")
+    try:
+        while True:
+            _scan_and_run()
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        click.echo("\nwatch: stopped.")
+
+
+# --------------------------------------------------------------------------- #
 # capabilities — list / show capability tags + their contributors
 # (per CAPABILITY_TAGS_DESIGN.md §7)
 # --------------------------------------------------------------------------- #
