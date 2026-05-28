@@ -775,7 +775,7 @@ def metric_run_cmd(
             vfiles = _list_videos(Path(vdir))
             for vf, rec in zip(vfiles, recs):
                 vids.append(vf); texts.append(rec.get("text", ""))
-            result = m.compute(videos=vids, prompts=texts)
+            result = m.compute(videos=vids, prompts=texts, device=device)
         elif kind == "per_video_with_vlm_judge":
             vdir = videos or gen_videos
             if vdir is None:

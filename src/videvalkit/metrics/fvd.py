@@ -20,8 +20,6 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-import numpy as np
-
 from videvalkit.core.distribution_metric import (
     BaseDistributionMetric,
     DistributionMetricResult,
@@ -125,10 +123,5 @@ class FVD(BaseDistributionMetric):
 
     @staticmethod
     def _resolve_device(device: str) -> str:
-        if device != "auto":
-            return device
-        try:
-            import torch
-            return "cuda" if torch.cuda.is_available() else "cpu"
-        except ImportError:
-            return "cpu"
+        from videvalkit.metrics.utils.device import resolve_device
+        return resolve_device(device)

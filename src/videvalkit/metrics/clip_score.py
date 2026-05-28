@@ -56,8 +56,8 @@ class CLIPScore:
         if self._model is not None:
             return
         import clip
-        import torch
-        self._device = device if torch.cuda.is_available() else "cpu"
+        from .utils.device import resolve_device
+        self._device = resolve_device(device)
         self._model, self._preprocess = clip.load(
             self._backbone_name, device=self._device
         )

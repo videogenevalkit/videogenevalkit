@@ -92,10 +92,5 @@ class KVD(BaseDistributionMetric):
 
     @staticmethod
     def _resolve_device(device: str) -> str:
-        if device != "auto":
-            return device
-        try:
-            import torch
-            return "cuda" if torch.cuda.is_available() else "cpu"
-        except ImportError:
-            return "cpu"
+        from videvalkit.metrics.utils.device import resolve_device
+        return resolve_device(device)
