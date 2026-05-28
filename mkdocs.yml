@@ -72,6 +72,12 @@ plugins:
             User Manual: 用户手册
             Developer Manual: 开发手册
             Test Manual: 测试手册
+            Product: 产品设计
+            Video Metrics: 视频指标
+            Extensibility: 扩展性
+            Quick Eval: 快速评测
+            Review Protocol: 评审协议
+            NPU Adaptation: NPU 适配
 
 markdown_extensions:
   - admonition
@@ -108,9 +114,8 @@ nav:
       - Contributing: wiki/Contributing.md
   - Design archive:
       - Product: design/PRODUCT_DESIGN.md
-      - Judge Selection: design/JUDGE_SELECTION_DESIGN.md
-      - Integration Framework: design/INTEGRATION_FRAMEWORK_DESIGN.md
       - Video Metrics: design/VIDEO_METRICS_DESIGN.md
+      - Extensibility: design/EXTENSIBILITY_DESIGN.md
       - Quick Eval: design/QUICK_EVAL_DESIGN.md
       - Capability Tags: design/CAPABILITY_TAGS_DESIGN.md
       - Review Protocol: design/REVIEW_PROTOCOL.md
