@@ -40,7 +40,7 @@ full flags.
 |---|---|
 | `metric list [--kind --no-judge --source]` | List metrics, filterable |
 | `metric show <name>` | Show a metric's registry entry |
-| `metric run --name M --gen-videos / --videos / --ref-videos / --refs / --prompts` | Run a metric |
+| `metric run --name M --gen-videos / --videos / --ref-videos / --refs / --prompts / --judge` | Run a metric |
 | `refs list / show <name> / register --name --path` | Manage reference video sets |
 | `fetch-refs --name <ref> / --all [--dry-run]` | Download a built-in reference set into the fetch cache |
 
@@ -51,6 +51,7 @@ full flags.
 | `distribution_reference` | `--gen-videos` + (`--ref-videos` or `--refs`) |
 | `per_prompt_reference_free` | `--videos` + `--prompts` |
 | `per_video_reference_free` | `--videos` |
+| `per_video_with_vlm_judge` | `--videos` + `--judge <name>` |
 
 `--allow-tiny-sample` bypasses the small-N guard for distribution metrics.
 

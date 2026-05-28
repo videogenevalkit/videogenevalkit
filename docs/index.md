@@ -3,7 +3,7 @@
 **Unified evaluation toolkit for text-to-video generation.**
 One CLI · one workspace · one schema. 10 benchmarks · 8+ judges · 20 metrics · 44 capability tags.
 
-> Status: `v0.2-dev` · 24 PRs merged · 363 tests green · ~97% of v0.2 scope.
+> Status: `v0.2-dev` · 384 tests green · v0.2 nearly complete.
 > This wiki is the primary documentation. Design rationale lives in [`docs/design/`](design/PRODUCT_DESIGN.md).
 
 ---
@@ -24,7 +24,7 @@ This wiki is the current, operational reference. Two other doc sets exist:
 | Doc set | Location | Status | Use for |
 |---|---|---|---|
 | **Wiki** (this) | `docs/wiki/` | ✅ current (v0.2) | day-to-day usage, reference, architecture |
-| **Manuals** | `docs/DEV_MANUAL.md` · `TEST_MANUAL.md` · `USER_MANUAL_{en,cn}.md` | ⚠️ v0.0.1-era + banners | deep architecture rationale (DEV), paper-alignment validation tables (TEST), long-form install (USER) |
+| **Manuals** | `docs/DEV_MANUAL.md` · `TEST_MANUAL.md` · `USER_MANUAL.md` (en/zh) | ⚠️ v0.0.1-era + banners | deep architecture rationale (DEV), paper-alignment validation tables (TEST), long-form install (USER) |
 | **Design archive** | `docs/design/` | 🔒 frozen | *why* each v0.2 subsystem was built the way it is (8 design docs + slide deck) |
 
 > Rule of thumb: **need to *do* something → wiki**; **need to know *why* → design**; **need validation numbers → TEST_MANUAL**.

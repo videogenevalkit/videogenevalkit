@@ -2,7 +2,7 @@
 
 [← Home](../index.md)
 
-> Snapshot: `v0.2-dev` · 24 PRs merged · 363 tests green · ~97% of v0.2 scope.
+> Snapshot: `v0.2-dev` · 384 tests green · v0.2 nearly complete.
 
 ---
 
@@ -26,7 +26,7 @@
 | Judge selection | `--judge paper/default/<name>` · user `judges.yaml` · ad-hoc endpoint · `--no-judge` |
 | Plugin loader | 3-layer discovery (builtin / entry_points / local dirs) |
 | Manifest benchmark | YAML Track-A adapter |
-| Metrics (14 functional) | FVD · VFID · KVD · CLIP-FVD · CLIP-Score · 7 vbench lifts · numeracy · spatial-relationship |
+| Metrics (16 functional) | FVD · VFID · KVD · CLIP-FVD · CLIP-Score · ViCLIP-Score · 7 vbench lifts · motion-magnitude · numeracy · spatial-relationship · artifact-diagnostic (needs judge) |
 | Metric/refs CLI | `metric list/show/run` · `refs list/show/register` |
 | Quick eval | 3 profiles · subset · `estimate` · `eval-suite` |
 | Training monitor | `watch` · `videvalkit.training.monitor` Python API |
