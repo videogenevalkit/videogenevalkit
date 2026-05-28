@@ -144,11 +144,12 @@ SUPPORTED_METRICS: dict[str, dict[str, Any]] = {
         needs_judge=False,
         compute_kind="local_vision",
         tags=["align.text2video", "align.prompt_following"],
-        algorithm="Per-clip ViCLIP video-text cosine over 16-frame clip",
+        algorithm="Per-clip ViCLIP-L/14 video-text cosine over 8 uniform frames",
         paper_alignment_test=None,
-        license="MIT",
-        version="0.1",
-        notes="ViCLIP trained on video-text pairs; more accurate than per-frame CLIP for T2V.",
+        license="MIT (ViCLIP / InternVideo)",
+        version="1.0",
+        notes="ViCLIP trained on video-text pairs; more accurate than per-frame "
+              "CLIP for T2V. Weights auto-fetched from OpenGVLab/VBench_Used_Models.",
     ),
 
 
