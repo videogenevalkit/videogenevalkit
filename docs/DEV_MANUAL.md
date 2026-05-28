@@ -15,19 +15,29 @@
 
 ---
 
-## Implementation Snapshot (v0.0.1, 2026-05-13)
+> ⚠️ **Historical reference (v0.0.1, 2026-05-13).** For the *current* v0.2 state
+> — 10 benchmarks, 20 standalone metrics, judge selection, profiles, capability
+> tags, training monitor — see the **[wiki](wiki/Home.md)**. This manual is kept
+> for its detailed architecture / object-model / module rationale; the v0.2
+> snapshot below is updated, but prose further down may still describe the
+> v0.0.1 plan (e.g. "planned" features that have since shipped).
+
+## Implementation Snapshot — updated for v0.2-dev
 
 | Dimension | Count | Registered |
 |---|---:|---|
-| Benchmarks (`SUPPORTED_BENCHMARKS`) | **9** | 6 anchored: vbench · vbench2 · videobench · worldjen · t2vcompbench · worldscore  ·  3 supplementary stubs: physics_iq · vbench_pp · v_reasonbench |
-| VLM Judges (`SUPPORTED_JUDGES`) | **8** | gemma-4-31b-local · qwen3-32b-local · qwen3-vl-32b-local · local-llava-video-7b · gemini-3-flash · gemini-2.5-pro · claude-sonnet-4-6 · gpt-4o |
+| Benchmarks (`SUPPORTED_BENCHMARKS`) | **10** | 6 anchored (vbench · vbench2 · videobench · worldjen · t2vcompbench · worldscore) · semantics_axis · 3 supplementary (physics_iq · vbench_pp · v_reasonbench) |
+| Standalone metrics (`SUPPORTED_METRICS`) | **20** (14 functional) | distribution: fvd · vfid · kvd · clip-fvd · alignment: clip-score · viclip-score · lift-outs + specialized. See [wiki/reference/Metrics](wiki/reference/Metrics.md) |
+| VLM Judges (`SUPPORTED_JUDGES`) | **8 + user yaml** | builtin 8 + `~/.config/videvalkit/judges.yaml` + ad-hoc endpoint; `paper`/`default`/`<name>` resolution |
 | Aggregators (`SUPPORTED_AGGREGATORS`) | **5** | weighted_sum · vbench_weighted · vbench2_category · phas · bt |
-| Core abstractions (`core/`) | **3 + types** | `BaseBenchmark` · `BaseScorer` · `BaseAggregator` + `WorkspaceLayout` + pydantic types |
-| CLI subcommands (`videvalkit`) | **5** | `list` · `doctor` · `eval` · `prepare-workspace` · `aggregate` (all production-ready as of 2026-05-13) |
-| Test suite | **66+** | 17 core unit + 3 HTTP integration (stdlib fake server) + 46+ adapter integration (all 6 anchored benchmarks have smoke + e2e tests) |
-| Conda env | **1 shared** | `envs/videvalkit.yaml` (used by all 6 anchored benchmarks); per-benchmark mode reachable via `CondaEnvDispatcher` |
+| Capability tags | **44** (10 top + 34 sub) | controlled vocab; `capabilities list/show/eval` |
+| Eval profiles | **3** | quick · standard · full + `estimate` |
+| Core abstractions (`core/`) | **4 + types** | `BaseBenchmark` · `BaseScorer` · `BaseDistributionMetric` · `BaseAggregator` + Profile / Subset / Capability + pydantic types |
+| CLI subcommands (`videvalkit`) | **15+** | list · doctor · eval · eval-suite · metric (list/show/run) · capabilities (list/show/eval) · refs · estimate · watch · aggregate · prepare-workspace · fetch-* |
+| Test suite | **363+** | core + adapter + metric + capability + CLI; CI: lint / pytest / doc-links / consistency |
+| Conda env | **1 shared** | `envs/videvalkit.yaml`; per-benchmark mode via `CondaEnvDispatcher` |
 
-> Use this table as "what v0.0.1 actually supports at a glance." Refresh before each release.
+> Current as of v0.2-dev. The detailed sections below are largely v0.0.1-era — cross-check against the [wiki](wiki/Home.md) for what actually ships today.
 
 ## 60-Second Quickstart
 

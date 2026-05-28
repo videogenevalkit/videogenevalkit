@@ -2,13 +2,13 @@
 
 **Unified evaluation toolkit for text-to-video generation models.**
 
-One config, one entrypoint, seven benchmarks. Score your model on VBench v1, VBench-2.0, Video-Bench, WorldJen, WorldScore, T2V-CompBench, and Semantics-Axis from a single command. Compares byte-for-byte against the official leaderboards.
+One config, one entrypoint, three ways to evaluate. Score your model across **10 benchmarks**, **20 standalone metrics**, or **44 capability tags** — pick a benchmark, a single metric, or a whole ability, with the **judge of your choice**. Benchmark scores compare byte-for-byte against official leaderboards.
 
 > 📖 **Full documentation: [docs/wiki/Home.md](docs/wiki/Home.md)** — getting started, guides, CLI/metrics/benchmarks/judges reference, architecture, roadmap. Design rationale archived in docs/design/.
 
 <p align="left">
   <a href="#quickstart"><img alt="quickstart" src="https://img.shields.io/badge/quickstart-30%20min-blue"></a>
-  <a href="#whats-supported"><img alt="benchmarks" src="https://img.shields.io/badge/benchmarks-7-orange"></a>
+  <a href="#whats-supported"><img alt="benchmarks" src="https://img.shields.io/badge/benchmarks-10-orange"></a>
   <a href="https://huggingface.co/datasets/videogenevalkit/checkpoints"><img alt="HF checkpoints" src="https://img.shields.io/badge/HF-checkpoints-yellow?logo=huggingface"></a>
   <a href="https://huggingface.co/datasets/videogenevalkit/smoke-data"><img alt="HF smoke data" src="https://img.shields.io/badge/HF-smoke%20data-yellow?logo=huggingface"></a>
   <a href="LICENSES/"><img alt="licenses" src="https://img.shields.io/badge/licenses-multi--upstream-lightgrey"></a>
@@ -36,7 +36,7 @@ Full per-dim tables: see [`docs/TEST_MANUAL.md`](docs/TEST_MANUAL.md).
 
 ## What's supported
 
-**7 benchmark adapters** — 6 anchored to public leaderboards + 1 in-house (all production-ready):
+**10 benchmark adapters** — 6 anchored to public leaderboards + Semantics-Axis (in-house) + 3 supplementary (physics_iq / vbench_pp / v_reasonbench):
 
 | Adapter | Upstream | What it scores |
 |---|---|---|
@@ -48,7 +48,21 @@ Full per-dim tables: see [`docs/TEST_MANUAL.md`](docs/TEST_MANUAL.md).
 | `t2vcompbench` | [T2V-CompBench V2](https://github.com/KaiyueSun98/T2V-CompBench/tree/V2) | 7 compositional dims; LLaVA-1.6-34B MLLM + GD-SwinT-OGC + SAM-H + Depth-Anything V1 + DOT |
 | `semantics_axis` | in-house (Semantics Axis Eval) | 21 prompt-following axes — entity / spatial / event / cinematic / modifier — + holistic `overall`; VLM-judge, 1-5 |
 
-Plus 3 supplementary stubs landing (Physics-IQ, VBench++, V-ReasonBench).
+Plus 3 supplementary adapters (Physics-IQ, VBench++, V-ReasonBench).
+
+### v0.2 also adds
+
+| Capability | What |
+|---|---|
+| **20 standalone metrics** | FVD · VFID · KVD · CLIP-FVD · CLIP-Score + 8 bench lift-outs (motion-smoothness, subject-consistency, ...) + specialized dims. Run any with `videvalkit metric run --name X`. 14 functional today. |
+| **3 entry points** | `eval --bench` (paper-comparable) · `metric run --name` (single scalar) · `capabilities eval` (cross-metric ability score) |
+| **Judge selection** | `--judge paper/default/<name>` · user `judges.yaml` · ad-hoc `--judge-endpoint` · `--no-judge` for offline runs |
+| **Eval profiles** | `--profile quick/standard/full` + `videvalkit estimate` cost preview |
+| **Training monitor** | `videvalkit watch` + `videvalkit.training.monitor` Python API for in-loop eval |
+| **Capability tags** | 44-tag vocab; `videvalkit capabilities list/show/eval` |
+| **Plugin-first** | add a metric/bench/judge via YAML / pip / `~/.videvalkit/` — no fork |
+
+See **[docs/wiki/Home.md](docs/wiki/Home.md)** for the full picture.
 
 **8 VLM/LLM judges** out of the box (`SUPPORTED_JUDGES`): local vLLM (Gemma-4-31B-IT, Qwen3-32B, Qwen3-VL-32B, LLaVA-Video-7B) + managed APIs (Gemini, GPT-4o, Claude). User-configurable endpoints via `~/.config/videvalkit/judges.yaml`.
 
