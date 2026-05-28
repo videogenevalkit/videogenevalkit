@@ -1,6 +1,6 @@
 # Guide: Profiles & Quick Eval
 
-[← Home](../Home.md)
+[← Home](../../index.md)
 
 Profiles trade accuracy for speed. They control the prompt subset, frame
 sampling, and samples-per-prompt — orthogonal to which judge you use.

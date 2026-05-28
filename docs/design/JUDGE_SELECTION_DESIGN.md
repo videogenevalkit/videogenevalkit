@@ -364,7 +364,7 @@ judge_cfg = resolve_judge(
 | `src/videvalkit/cli.py` | `eval` 命令加 `--judge-endpoint / --judge-model / --judge-kind / --judge-api-key-env` 四个 flag；新 `eval-suite` 子命令；接 `judges` 子命令组 |
 | `src/videvalkit/runner.py` | 用 `resolve_judge()` 替换现有的 inline 解析；增加 `judge_override` 参数 |
 | `src/videvalkit/diagnostics.py` | judges 部分调用 `judges test --all` 的内部 API |
-| `docs/USER_MANUAL_en.md` + `_cn.md` | 加一节 §X "Switching VLM Judges"，覆盖三档与 ad-hoc 用法 |
+| `docs/USER_MANUAL.md` + `_cn.md` | 加一节 §X "Switching VLM Judges"，覆盖三档与 ad-hoc 用法 |
 | `docs/DEV_MANUAL.md` | §5.3 Module C 更新；§16 (Planned) 标为 done |
 | `README.md` | quickstart 加一条 "want to use your own endpoint? edit `~/.config/videvalkit/judges.yaml`" |
 

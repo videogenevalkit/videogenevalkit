@@ -1,6 +1,6 @@
 # Guide: Judge Selection
 
-[← Home](../Home.md) · see also [Judges Reference](../reference/Judges.md)
+[← Home](../../index.md) · see also [Judges Reference](../reference/Judges.md)
 
 ---
 

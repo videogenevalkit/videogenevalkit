@@ -1,6 +1,6 @@
 # Architecture
 
-[← Home](Home.md)
+[← Home](../index.md)
 
 ---
 
@@ -97,6 +97,6 @@ Both converge on the same runner / workspace / scheduler.
 ## Design archives
 
 The original design documents (rationale, trade-offs, decision snapshots) live in
-[`docs/design/`](../design/): PRODUCT, JUDGE_SELECTION, INTEGRATION_FRAMEWORK,
+[`docs/design/`](../design/PRODUCT_DESIGN.md): PRODUCT, JUDGE_SELECTION, INTEGRATION_FRAMEWORK,
 VIDEO_METRICS, QUICK_EVAL, CAPABILITY_TAGS, REVIEW_PROTOCOL, NPU_ADAPTATION.
 The wiki is the operational reference; the design docs explain *why*.

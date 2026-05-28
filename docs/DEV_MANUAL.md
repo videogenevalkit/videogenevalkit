@@ -17,7 +17,7 @@
 
 > ⚠️ **Historical reference (v0.0.1, 2026-05-13).** For the *current* v0.2 state
 > — 10 benchmarks, 20 standalone metrics, judge selection, profiles, capability
-> tags, training monitor — see the **[wiki](wiki/Home.md)**. This manual is kept
+> tags, training monitor — see the **[wiki](index.md)**. This manual is kept
 > for its detailed architecture / object-model / module rationale; the v0.2
 > snapshot below is updated, but prose further down may still describe the
 > v0.0.1 plan (e.g. "planned" features that have since shipped).
@@ -37,7 +37,7 @@
 | Test suite | **363+** | core + adapter + metric + capability + CLI; CI: lint / pytest / doc-links / consistency |
 | Conda env | **1 shared** | `envs/videvalkit.yaml`; per-benchmark mode via `CondaEnvDispatcher` |
 
-> Current as of v0.2-dev. The detailed sections below are largely v0.0.1-era — cross-check against the [wiki](wiki/Home.md) for what actually ships today.
+> Current as of v0.2-dev. The detailed sections below are largely v0.0.1-era — cross-check against the [wiki](index.md) for what actually ships today.
 
 ## 60-Second Quickstart
 
@@ -1269,7 +1269,7 @@ The weight tarball is large (~ 200 GB full); we recommend splitting into "minimu
 
 ## 9. User Manual
 
-> **The user-facing how-to-run content has moved to [USER_MANUAL.md](USER_MANUAL_en.md).** That document covers installation, starting VLM backends, workspace preparation, running evaluations, customizing the inputs (videos / prompts / dimensions / judge), and troubleshooting.
+> **The user-facing how-to-run content has moved to [USER_MANUAL.md](USER_MANUAL.md).** That document covers installation, starting VLM backends, workspace preparation, running evaluations, customizing the inputs (videos / prompts / dimensions / judge), and troubleshooting.
 >
 > The remainder of this DEV_MANUAL focuses on architecture, module decisions, and the engineering rigor that backs releases. The pipeline-verification framework that used to live in TEST_MANUAL §3.2 is now in [§9b below](#9b-pipeline-verification-framework).
 
@@ -1277,7 +1277,7 @@ The weight tarball is large (~ 200 GB full); we recommend splitting into "minimu
 
 | You want to … | Doc to read |
 |---|---|
-| Install the toolkit, run a benchmark, customize inputs | [USER_MANUAL.md](USER_MANUAL_en.md) |
+| Install the toolkit, run a benchmark, customize inputs | [USER_MANUAL.md](USER_MANUAL.md) |
 | Know what each metric measures and which paper it reproduces | [TEST_MANUAL.md](TEST_MANUAL.md) |
 | Know what scores we got and how they align with the leaderboard | [TEST_MANUAL.md](TEST_MANUAL.md) |
 | Understand the architecture, module boundaries, design tradeoffs | this document (§1–§8) |
@@ -1456,7 +1456,7 @@ A Benchmark whose fingerprint has not been re-emitted in 30 days is considered s
 
 ---
 
-> The legacy §9 user-manual subsections below are kept temporarily for backward-compatibility with bookmarks. New readers should use [USER_MANUAL.md](USER_MANUAL_en.md).
+> The legacy §9 user-manual subsections below are kept temporarily for backward-compatibility with bookmarks. New readers should use [USER_MANUAL.md](USER_MANUAL.md).
 
 ### 9.1 Installation
 

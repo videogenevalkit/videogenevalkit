@@ -4,7 +4,7 @@
 One CLI · one workspace · one schema. 10 benchmarks · 8+ judges · 20 metrics · 44 capability tags.
 
 > Status: `v0.2-dev` · 24 PRs merged · 363 tests green · ~97% of v0.2 scope.
-> This wiki is the primary documentation. Design rationale lives in [`docs/design/`](../design/).
+> This wiki is the primary documentation. Design rationale lives in [`docs/design/`](design/PRODUCT_DESIGN.md).
 
 ---
 
@@ -12,10 +12,10 @@ One CLI · one workspace · one schema. 10 benchmarks · 8+ judges · 20 metrics
 
 | Section | Pages |
 |---|---|
-| **Start here** | [Getting Started](Getting-Started.md) · [Core Concepts](Concepts.md) |
-| **Guides** | [Judge Selection](guides/Judge-Selection.md) · [Profiles & Quick Eval](guides/Profiles-and-Quick-Eval.md) · [Training Monitor](guides/Training-Monitor.md) · [Extending](guides/Extending.md) |
-| **Reference** | [CLI](reference/CLI.md) · [Benchmarks](reference/Benchmarks.md) · [Metrics](reference/Metrics.md) · [Judges](reference/Judges.md) · [Capability Tags](reference/Capability-Tags.md) |
-| **Project** | [Architecture](Architecture.md) · [Roadmap & Status](Roadmap.md) · [Contributing](Contributing.md) |
+| **Start here** | [Getting Started](wiki/Getting-Started.md) · [Core Concepts](wiki/Concepts.md) |
+| **Guides** | [Judge Selection](wiki/guides/Judge-Selection.md) · [Profiles & Quick Eval](wiki/guides/Profiles-and-Quick-Eval.md) · [Training Monitor](wiki/guides/Training-Monitor.md) · [Extending](wiki/guides/Extending.md) |
+| **Reference** | [CLI](wiki/reference/CLI.md) · [Benchmarks](wiki/reference/Benchmarks.md) · [Metrics](wiki/reference/Metrics.md) · [Judges](wiki/reference/Judges.md) · [Capability Tags](wiki/reference/Capability-Tags.md) |
+| **Project** | [Architecture](wiki/Architecture.md) · [Roadmap & Status](wiki/Roadmap.md) · [Contributing](wiki/Contributing.md) |
 
 ### Full documentation map
 
@@ -70,4 +70,4 @@ videvalkit metric run --name fvd --gen-videos gen/ --refs my-ref --allow-tiny-sa
 videvalkit capabilities eval motion --videos gen/
 ```
 
-See [Getting Started](Getting-Started.md) for the full walkthrough.
+See [Getting Started](wiki/Getting-Started.md) for the full walkthrough.

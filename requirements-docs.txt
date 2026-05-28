@@ -1,0 +1,6 @@
+# Docs site build (MkDocs Material + bilingual i18n).
+#   pip install -r requirements-docs.txt
+#   mkdocs serve        # local preview with language switcher
+#   mkdocs build        # static site -> site/  (en at /, zh at /zh/)
+mkdocs-material>=9.5
+mkdocs-static-i18n>=1.2

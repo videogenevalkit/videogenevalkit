@@ -1,6 +1,6 @@
 # Roadmap & Status
 
-[← Home](Home.md)
+[← Home](../index.md)
 
 > Snapshot: `v0.2-dev` · 24 PRs merged · 363 tests green · ~97% of v0.2 scope.
 

@@ -1,6 +1,6 @@
 # Contributing
 
-[← Home](Home.md)
+[← Home](../index.md)
 
 Every change goes through a three-layer review gate. Full protocol:
 [`docs/design/REVIEW_PROTOCOL.md`](../design/REVIEW_PROTOCOL.md).

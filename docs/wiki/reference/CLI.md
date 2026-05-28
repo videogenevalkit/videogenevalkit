@@ -1,6 +1,6 @@
 # CLI Reference
 
-[← Home](../Home.md)
+[← Home](../../index.md)
 
 All commands are subcommands of `videvalkit`. Run `videvalkit <cmd> --help` for
 full flags.

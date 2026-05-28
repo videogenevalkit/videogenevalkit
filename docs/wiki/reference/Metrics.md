@@ -1,6 +1,6 @@
 # Metrics Reference
 
-[← Home](../Home.md)
+[← Home](../../index.md)
 
 20 planned standalone metrics in two tiers. **16 run judge-free today**, plus
 `artifact-diagnostic` (registered, runs with a `--judge`). The remaining 3

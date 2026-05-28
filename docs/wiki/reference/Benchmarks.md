@@ -1,6 +1,6 @@
 # Benchmarks Reference
 
-[← Home](../Home.md)
+[← Home](../../index.md)
 
 10 registered benchmark adapters. Each wraps upstream code byte-for-byte.
 Run with `videvalkit eval --bench <name>`.
