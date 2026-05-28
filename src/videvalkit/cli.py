@@ -95,12 +95,64 @@ def doctor_cmd(workspace: Path | None, as_json: bool) -> None:
     def _ok(b):
         return "OK" if b is True else ("--" if b is None else "MISS")
 
+    # Devices
+    dev = rep.get("devices", {})
+    click.echo("== Devices ==")
+    cuda = dev.get("cuda", {})
+    if cuda:
+        click.echo(f"  cuda          {_ok(cuda.get('available')):5s}  "
+                   f"count={cuda.get('count', 0)}")
+    if dev.get("npu", {}).get("available"):
+        click.echo(f"  npu           OK")
+    if dev.get("mps", {}).get("available"):
+        click.echo(f"  mps           OK")
+    if "torch" in dev:
+        click.echo(f"  torch         MISS  {dev['torch'].get('reason', '')}")
+
+    # Benchmarks summary
+    bm = rep.get("benchmarks", {})
+    click.echo(f"== Benchmarks ({bm.get('total', 0)}) ==")
+    click.echo(f"  judge-free:  {bm.get('judge_free', [])}")
+    click.echo(f"  needs judge: {bm.get('needs_judge', [])}")
+
+    # Metrics summary
+    met = rep.get("metrics", {})
+    if "error" not in met:
+        click.echo(f"== Metrics ({met.get('total', 0)}; "
+                   f"{met.get('judge_free', 0)} judge-free) ==")
+        for kind, n in met.get("by_kind", {}).items():
+            click.echo(f"  {kind:30s}  {n}")
+
+    # Profiles
+    prof = rep.get("profiles", {})
+    if "error" not in prof:
+        click.echo("== Eval profiles ==")
+        for name, p in prof.items():
+            click.echo(f"  {name:10s}  subset={str(p.get('subset')):14s}  "
+                       f"frames={p.get('frames')}  ~{p.get('est_wallclock_min')}min")
+
+    # Capability coverage
+    cap = rep.get("capability_coverage", {})
+    if "error" not in cap:
+        click.echo("== Capability coverage ==")
+        click.echo(f"  {cap.get('covered_tags', 0)}/{cap.get('total_tags', 0)} "
+                   f"tags have >=1 contributor")
+        if cap.get("uncovered_top_level"):
+            click.echo(f"  uncovered top-level: {cap['uncovered_top_level']}")
+
+    # Plugins
+    pl = rep.get("plugins", {})
+    if "error" not in pl:
+        click.echo("== Plugins ==")
+        click.echo(f"  disabled_by_env={pl.get('disabled_by_env')}  "
+                   f"user_dir_exists={pl.get('user_dir_exists')}")
+
     click.echo("== Conda envs ==")
     for b, r in rep["envs"].items():
-        click.echo(f"  {b:12s}  {_ok(r['ok'])}  {r.get('reason', '')}")
+        click.echo(f"  {b:14s}  {_ok(r['ok'])}  {r.get('reason', '')}")
     click.echo("== Adapter imports ==")
     for b, r in rep["adapters"].items():
-        click.echo(f"  {b:12s}  {_ok(r['ok'])}  {r.get('error', '')}")
+        click.echo(f"  {b:14s}  {_ok(r['ok'])}  {r.get('error', '')}")
     click.echo("== Judges ==")
     for name, r in rep["judges"].items():
         click.echo(f"  {name:24s}  reach={_ok(r['reachable']):5s}  "
@@ -108,7 +160,7 @@ def doctor_cmd(workspace: Path | None, as_json: bool) -> None:
     if "workspace" in rep:
         click.echo("== Workspace ==")
         for k, d in rep["workspace"]["dirs"].items():
-            click.echo(f"  {k:12s}  exists={_ok(d['exists'])}  n={d['n_entries']}")
+            click.echo(f"  {k:14s}  exists={_ok(d['exists'])}  n={d['n_entries']}")
 
 
 @main.command("aggregate")
