@@ -144,6 +144,7 @@ class TestComputeShell:
             m.compute(
                 gen_videos=[tmp_path / f"v{i}.mp4" for i in range(200)],
                 ref_videos=[tmp_path / f"r{i}.mp4" for i in range(2048)],
+                backbone="i3d-k400",  # explicit → strict [no auto-fallback]
             )
 
     def test_fvd_unsupported_backbone_rejected(self, tmp_path):
