@@ -41,7 +41,7 @@ def _collect_metric_contributors(
     """Walk SUPPORTED_METRICS (if present) and yield contributors."""
     if metrics_registry is None:
         try:
-            from videvalkit.configs.metrics import SUPPORTED_METRICS as _m
+            from videvalkit.metrics import SUPPORTED_METRICS as _m
             metrics_registry = _m
         except ImportError:
             # metrics module not landed yet (v0.2 M3 in flight)

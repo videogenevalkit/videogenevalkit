@@ -42,10 +42,10 @@ class TestRegistry:
             assert cfg["needs_judge"] is False
             assert cfg["compute_kind"] == "local_vision"
 
-    def test_all_distribution_have_realism_distribution_tag(self):
+    def test_all_distribution_have_real_distribution_tag(self):
         for name in list_metrics(kind="distribution_reference"):
             cfg = SUPPORTED_METRICS[name]
-            assert "realism.distribution" in cfg["tags"]
+            assert "real.distribution" in cfg["tags"]
 
     def test_clip_fvd_marked_experimental(self):
         assert SUPPORTED_METRICS["clip-fvd"].get("experimental", False) is True
