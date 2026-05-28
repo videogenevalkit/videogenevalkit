@@ -4,6 +4,8 @@
 
 One config, one entrypoint, seven benchmarks. Score your model on VBench v1, VBench-2.0, Video-Bench, WorldJen, WorldScore, T2V-CompBench, and Semantics-Axis from a single command. Compares byte-for-byte against the official leaderboards.
 
+> 📖 **Full documentation: [docs/wiki/Home.md](docs/wiki/Home.md)** — getting started, guides, CLI/metrics/benchmarks/judges reference, architecture, roadmap. Design rationale archived in docs/design/.
+
 <p align="left">
   <a href="#quickstart"><img alt="quickstart" src="https://img.shields.io/badge/quickstart-30%20min-blue"></a>
   <a href="#whats-supported"><img alt="benchmarks" src="https://img.shields.io/badge/benchmarks-7-orange"></a>

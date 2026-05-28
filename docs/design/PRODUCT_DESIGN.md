@@ -9,7 +9,7 @@
 | 目标读者 | 全角色：核心开发 · benchmark 集成者 · VLM 集成者 · 端到端评测用户 · 下游部署团队 · 论文复现者 |
 
 > 这份文档是 **入口**。读完它能知道 videogenevalkit 是什么、要解决什么、目前到哪一步、下一步去哪。细节落在三份子文档：
-> - [`DEV_MANUAL.md`](DEV_MANUAL.md) — 已实现的工程细节（v0.0.1 现状）
+> - [`DEV_MANUAL.md`](../DEV_MANUAL.md) — 已实现的工程细节（v0.0.1 现状）
 > - [`JUDGE_SELECTION_DESIGN.md`](JUDGE_SELECTION_DESIGN.md) — VLM judge 切换层（设计中）
 > - [`INTEGRATION_FRAMEWORK_DESIGN.md`](INTEGRATION_FRAMEWORK_DESIGN.md) — benchmark + scorer 快速集成层（设计中）
 
