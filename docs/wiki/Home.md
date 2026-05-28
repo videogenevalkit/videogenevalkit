@@ -17,6 +17,18 @@ One CLI · one workspace · one schema. 10 benchmarks · 8+ judges · 20 metrics
 | **Reference** | [CLI](reference/CLI.md) · [Benchmarks](reference/Benchmarks.md) · [Metrics](reference/Metrics.md) · [Judges](reference/Judges.md) · [Capability Tags](reference/Capability-Tags.md) |
 | **Project** | [Architecture](Architecture.md) · [Roadmap & Status](Roadmap.md) · [Contributing](Contributing.md) |
 
+### Full documentation map
+
+This wiki is the current, operational reference. Two other doc sets exist:
+
+| Doc set | Location | Status | Use for |
+|---|---|---|---|
+| **Wiki** (this) | `docs/wiki/` | ✅ current (v0.2) | day-to-day usage, reference, architecture |
+| **Manuals** | `docs/DEV_MANUAL.md` · `TEST_MANUAL.md` · `USER_MANUAL_{en,cn}.md` | ⚠️ v0.0.1-era + banners | deep architecture rationale (DEV), paper-alignment validation tables (TEST), long-form install (USER) |
+| **Design archive** | `docs/design/` | 🔒 frozen | *why* each v0.2 subsystem was built the way it is (8 design docs + slide deck) |
+
+> Rule of thumb: **need to *do* something → wiki**; **need to know *why* → design**; **need validation numbers → TEST_MANUAL**.
+
 ---
 
 ## What it is

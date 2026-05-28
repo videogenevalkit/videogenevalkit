@@ -1,5 +1,7 @@
 # videvalkit 用户手册
 
+> 📖 **[wiki](wiki/Home.md) 是主文档（最新）。** 本手册是较长的 v0.0.1 安装/运行参考；v0.2 新功能[judge 切换/profile/metric/capability/训练监控]见本文 §11.9 与 wiki guides。
+
 | 字段 | 值 |
 |---|---|
 | 标题 | videvalkit 用户手册（中文版） |

@@ -1,5 +1,7 @@
 # videvalkit Test Manual — Datasets, Dimensions, Methods
 
+> ⚠️ **Validation reference (v0.0.1/v0.1.0 era).** Benchmark paper-alignment tables here are still valid. For current v0.2 features and the metric scoreboard see the **[wiki](wiki/Home.md)**.
+
 | Field | Value |
 |---|---|
 | Title | videvalkit Test Manual |
