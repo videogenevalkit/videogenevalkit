@@ -287,4 +287,28 @@ SUPPORTED_METRICS: dict[str, dict[str, Any]] = {
         license="research-only (t2vcompbench)", version="1.0",
     ),
 
+    # ============================================================
+    # Artifact diagnostic [MLLM-as-judge, Artifact-Bench port] — needs_judge
+    # ============================================================
+    "artifact-diagnostic": dict(
+        kind="per_video_with_vlm_judge",
+        source="canonical/artifact-bench-port",
+        cls="videvalkit.metrics.artifact_diagnostic:ArtifactDiagnostic",
+        needs_judge=True,
+        compute_kind="vlm_judge",
+        inputs=["videos", "judge"],
+        output_kind="per_video_multilabel",
+        tags=["vq.artifact_free"],
+        algorithm="MLLM multi-label detection over the 30-type Artifact-Bench "
+                  "taxonomy [arXiv 2605.18984]; per-artifact frequency + top-K.",
+        paper_alignment_test=None,
+        license="research-only (Artifact-Bench)",
+        version="0.1",
+        experimental=True,
+        notes="v0.2 port of Artifact-Bench as a standalone diagnostic. Taxonomy "
+              "leaves to be reconciled with the paper; full judge-eval bench in "
+              "v0.3. Overlaps lift-outs: flickering~temporal-flickering, "
+              "identity_drift~subject-consistency, noise_grain~imaging-quality.",
+    ),
+
 }
