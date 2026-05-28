@@ -156,12 +156,18 @@ class TestComputeShell:
                 backbone="not-a-backbone",
             )
 
-    def test_kvd_lower_min_recommended(self, tmp_path):
-        """KVD allows smaller N (50) than FVD (100)."""
+    def test_kvd_lower_min_recommended(self, tmp_path, monkeypatch):
+        """KVD allows smaller N (50) than FVD (100). 60 videos passes the size
+        guard; explicit i3d-k400 [no weights] then raises FileNotFoundError —
+        confirming we got past the guard, not blocked by it. [KVD is now
+        functional via s3d-k400; this test pins the strict-i3d branch.]"""
+        monkeypatch.delenv("VIDEVALKIT_FVD_I3D_PATH", raising=False)
+        monkeypatch.setenv("VIDEVALKIT_CACHE_HOME", str(tmp_path / "nocache"))
         m = get_metric("kvd")
-        # 60 videos: above KVD threshold, but below FVD's 100
-        with pytest.raises(NotImplementedError):  # past size guard
+        # 60 videos: above KVD threshold (50), below FVD's 100
+        with pytest.raises(FileNotFoundError):  # past size guard, then strict i3d
             m.compute(
                 gen_videos=[tmp_path / f"v{i}.mp4" for i in range(60)],
                 ref_videos=[tmp_path / f"r{i}.mp4" for i in range(200)],
+                backbone="i3d-k400",
             )

@@ -90,12 +90,11 @@ class TestMetricRun:
         assert result.exit_code != 0  # needs --ref-videos or --refs
 
     def test_run_shell_metric_reports_not_functional(self, cli_runner, videos_dir):
-        """kvd is a shell → exit 3 with clear message."""
+        """motion-magnitude is still a shell [worldscore SEA-RAFT runner not
+        wired] → exit 3 with clear message. [kvd/clip-fvd are now functional.]"""
         result = cli_runner.invoke(main, [
-            "metric", "run", "--name", "kvd",
-            "--gen-videos", str(videos_dir),
-            "--ref-videos", str(videos_dir),
-            "--allow-tiny-sample",
+            "metric", "run", "--name", "motion-magnitude",
+            "--videos", str(videos_dir),
         ])
         assert result.exit_code == 3
         assert "NOT YET FUNCTIONAL" in result.output
