@@ -4,7 +4,7 @@ Per docs/VIDEO_METRICS_DESIGN.md §3.3-§3.4 + §5.
 
 v0.2 ships:
   * 7 vbench quality-axis lifts [functional given vbench checkpoints]
-  * 1 worldscore motion-magnitude lift [shell]
+  * 1 worldscore motion-magnitude lift [functional given worldscore upstream]
   * Registry + capability tagging + class shapes
 
 Structural tests [registry / mapping / class] run always. The actual
@@ -100,12 +100,33 @@ class TestCapabilityWiring:
         assert any("motion-smoothness" in n for n in names)
 
 
-# ----------------------------------------------------- worldscore shell ---
-class TestWorldscoreShell:
-    def test_motion_magnitude_shell_raises(self, tmp_path):
+# ----------------------------------------------------- worldscore lift ---
+class TestMotionMagnitude:
+    def test_empty_input_returns_zero(self):
+        # Empty input short-circuits before the worldscore scorer is loaded.
         m = get_metric("motion-magnitude")
-        with pytest.raises(NotImplementedError, match="SEA-RAFT runner"):
-            m.compute(videos=tmp_path)
+        result = m.compute(videos=[])
+        assert result.score == 0.0
+        assert result.n_videos == 0
+
+    @pytest.mark.needs_gpu
+    def test_motion_magnitude_runs(self, tmp_path):
+        """Real SEA-RAFT flow on a clip; skipped without worldscore upstream.
+
+        Requires $VIDEVALKIT_WORLDSCORE_ROOT (or the staged cache) + SEA-RAFT
+        weights + CUDA. Verifies a moving clip yields a positive flow magnitude.
+        """
+        sample = Path(__file__).parent / "data" / "tiny_clip.mp4"
+        if not sample.is_file():
+            pytest.skip("no sample clip available")
+        m = get_metric("motion-magnitude")
+        try:
+            result = m.compute(videos=[sample])
+        except (ImportError, FileNotFoundError) as e:
+            pytest.skip(f"worldscore upstream not staged: {e}")
+        assert result.n_videos == 1
+        assert result.per_video[str(sample)] >= 0.0
+        assert result.backbone == "SEA-RAFT"
 
 
 # ----------------------------------------------------- bit-exact contract ---

@@ -89,11 +89,25 @@ class TestMetricRun:
         ])
         assert result.exit_code != 0  # needs --ref-videos or --refs
 
-    def test_run_shell_metric_reports_not_functional(self, cli_runner, videos_dir):
-        """motion-magnitude is still a shell [worldscore SEA-RAFT runner not
-        wired] → exit 3 with clear message. [kvd/clip-fvd are now functional.]"""
+    def test_run_not_implemented_reports_not_functional(
+        self, cli_runner, videos_dir, monkeypatch
+    ):
+        """metric run maps NotImplementedError → exit 3 with a clear message.
+
+        No registered metric is a shell anymore (motion-magnitude is now a
+        functional worldscore lift), so simulate a not-yet-wired compute.
+        """
+        import videvalkit.metrics as metrics_mod
+
+        class _Shell:
+            name = "aesthetic-quality"
+
+            def compute(self, *a, **k):
+                raise NotImplementedError("backbone not wired [test]")
+
+        monkeypatch.setattr(metrics_mod, "get_metric", lambda name: _Shell())
         result = cli_runner.invoke(main, [
-            "metric", "run", "--name", "motion-magnitude",
+            "metric", "run", "--name", "aesthetic-quality",
             "--videos", str(videos_dir),
         ])
         assert result.exit_code == 3
