@@ -69,11 +69,13 @@ class TestRegistry:
 
 # ----------------------------------------------------- guards ---
 class TestGuards:
-    def test_fvd_i3d_still_pending(self, tmp_path):
-        """Default backbone i3d-k400 still raises [weights pending], but with
-        a clear pointer to s3d-k400."""
+    def test_fvd_i3d_needs_weights(self, tmp_path, monkeypatch):
+        """i3d-k400 [paper-canonical] raises FileNotFoundError pointing to
+        s3d-k400 when i3d_torchscript.pt is not placed locally."""
+        monkeypatch.delenv("VIDEVALKIT_FVD_I3D_PATH", raising=False)
+        monkeypatch.setenv("VIDEVALKIT_CACHE_HOME", str(tmp_path / "nocache"))
         m = get_metric("fvd")
-        with pytest.raises(NotImplementedError, match="s3d-k400"):
+        with pytest.raises(FileNotFoundError, match="s3d-k400"):
             m.compute(
                 gen_videos=[tmp_path / f"v{i}.mp4" for i in range(200)],
                 ref_videos=[tmp_path / f"r{i}.mp4" for i in range(200)],

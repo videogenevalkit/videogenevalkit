@@ -62,20 +62,29 @@ class FVD(BaseDistributionMetric):
         if warning and warning.startswith("ERROR:") and not allow_tiny_sample:
             raise ValueError(warning + " Pass --allow-tiny-sample to override.")
 
-        if bb in ("i3d-k400", "videomae-v2-base", "vjepa-l16"):
+        if bb in ("videomae-v2-base", "vjepa-l16"):
             raise NotImplementedError(
-                f"FVD backbone {bb!r} awaits weight fetch from "
-                f"videogenevalkit/checkpoints [pending HF hosting]. "
-                f"Use --backbone s3d-k400 for a functional Kinetics-400 "
-                f"alternative [torchvision S3D, auto-download]."
+                f"FVD backbone {bb!r} not wired yet. "
+                f"Use --backbone s3d-k400 [functional] or i3d-k400 [paper-"
+                f"canonical, needs i3d_torchscript.pt placed locally]."
             )
 
-        # s3d-k400 functional path
         clip_cfg = clip_sampling or {"n_frames": 16, "resize": 224}
         dev = self._resolve_device(device)
-        from videvalkit.metrics.backbones.s3d_k400 import S3DFeatureExtractor
 
-        extractor = S3DFeatureExtractor(device=dev)
+        if bb == "i3d-k400":
+            # Paper-canonical. Loads local i3d_torchscript.pt if present;
+            # raises a clear FileNotFoundError [→ place weights or use s3d] if not.
+            from videvalkit.metrics.backbones.i3d_k400 import I3DFeatureExtractor
+            extractor = I3DFeatureExtractor(device=dev)
+            backbone_version = "i3d-k400-torchscript [StyleGAN-V convention]"
+            note = "paper-canonical i3d-k400"
+        else:  # s3d-k400 — functional, torchvision auto-download
+            from videvalkit.metrics.backbones.s3d_k400 import S3DFeatureExtractor
+            extractor = S3DFeatureExtractor(device=dev)
+            backbone_version = "torchvision-S3D_Weights.KINETICS400_V1"
+            note = "s3d-k400 backbone; not byte-identical to paper i3d-k400"
+
         gen_feats = extractor.extract_many(gen_videos, **clip_cfg)
         ref_feats = extractor.extract_many(ref_videos, **clip_cfg)
         score = fid_from_features(gen_feats, ref_feats)
@@ -86,10 +95,10 @@ class FVD(BaseDistributionMetric):
             n_gen=n_gen,
             n_ref=len(ref_videos),
             backbone=bb,
-            backbone_version="torchvision-S3D_Weights.KINETICS400_V1",
+            backbone_version=backbone_version,
             clip_sampling=clip_cfg,
             sample_size_warning=warning,
-            meta={"note": "s3d-k400 backbone; not byte-identical to paper i3d-k400"},
+            meta={"note": note},
         )
 
     @staticmethod
