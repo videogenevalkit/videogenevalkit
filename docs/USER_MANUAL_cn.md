@@ -1099,6 +1099,120 @@ videvalkit aggregate --workspace ~/myeval/ws
 
 ---
 
+## 11.9 v0.2 新能力 — judge 切换、profile、metric、能力 tag、训练监控
+
+> v0.2 新增。以下功能叠加在上面的 `eval` 流程之上。
+
+### 切换 VLM judge
+
+每个 benchmark 声明 `default_judge` 和 `paper_judge`，用 `--judge` 选：
+
+```bash
+videvalkit eval --bench worldjen --judge default            # 省事 / 已验证
+videvalkit eval --bench t2vcompbench --judge paper          # paper 忠实复现 (LLaVA-1.6-34B)
+videvalkit eval --bench worldjen --judge claude-sonnet-4-6  # 任意注册表名
+```
+
+不改源码加自己的 endpoint —— 放一个 `~/.config/videvalkit/judges.yaml`：
+
+```yaml
+judges:
+  my-cluster-qwen3-vl:
+    kind: openai_compatible
+    endpoint: http://10.20.30.40:8005/v1
+    model: Qwen/Qwen3-VL-32B-Instruct
+    provider: Qwen
+    api_key_env: null
+```
+
+或临时 ad-hoc（无需注册）：
+
+```bash
+videvalkit eval --bench worldjen \
+  --judge-endpoint http://10.0.0.5:8003/v1 \
+  --judge-model google/gemma-4-31b-it \
+  --judge-kind openai_compatible
+```
+
+完全没有 judge endpoint？只跑不需要 judge 的 bench/metric：
+
+```bash
+videvalkit list benchmarks --no-judge      # 4 个 bench 不需 VLM
+videvalkit eval --bench vbench --no-judge  # bench 需要 judge 时 fail-fast
+```
+
+### Eval profile — quick / standard / full
+
+```bash
+videvalkit eval --bench vbench --profile quick      # ~5-10 分钟，训练监控
+videvalkit eval --bench vbench --profile standard   # ~30-60 分钟，ablation
+videvalkit eval --bench vbench --profile full       # 全集（默认；paper）
+videvalkit estimate --bench vbench --bench worldjen --profile quick   # 跑前算账
+```
+
+`--profile full --judge paper` 是 paper 忠实复现档。
+
+### 独立 metric
+
+不用 benchmark 脚手架，单独跑一个指标：
+
+```bash
+videvalkit metric list --no-judge
+videvalkit metric show fvd
+videvalkit metric run --name clip-score --videos gen/ --prompts prompts.jsonl
+videvalkit metric run --name fvd --gen-videos gen/ --refs ucf101-fvd --backbone s3d-k400
+videvalkit metric run --name motion-smoothness --videos gen/
+```
+
+分布层 metric（FVD/VFID/KVD）的参考集：
+
+```bash
+videvalkit refs list
+videvalkit refs register --name my-ref --path /data/my_reference_videos/
+videvalkit metric run --name vfid --gen-videos gen/ --refs my-ref
+```
+
+### 能力 tag — 按能力评测，不按 bench
+
+每个 metric/bench-dim 带能力 tag。一键跑某能力下所有 metric：
+
+```bash
+videvalkit capabilities list                       # 10 顶层 + 34 子
+videvalkit capabilities show motion                # 谁贡献这个能力
+videvalkit capabilities eval motion --videos gen/  # 跨 metric 能力分
+```
+
+### 多 bench + 训练循环监控
+
+```bash
+# 多个 bench 跑进一个 workspace
+videvalkit eval-suite --all-anchored --profile quick --videos gen/ --workspace ws/
+
+# 监听 checkpoint 目录，每出新 model 就评一次
+videvalkit watch --videos-pattern '/runs/r42/checkpoints/step_*/samples' \
+  --bench vbench --profile quick --workspace ws/
+```
+
+训练脚本里：
+
+```python
+from videvalkit.training import monitor, MonitorConfig
+cfg = MonitorConfig(benches=["vbench"], profile="quick", workspace="ws/")
+for step in range(0, 100_000, 1000):
+    if step % 5000 == 0:
+        prompts = monitor.preview_prompts(cfg)           # 该生成哪些 prompt 的视频
+        videos = generate_videos(prompts)
+        result = monitor.eval(videos, model_name=f"step_{step}", cfg=cfg)
+        tb.add_scalar("eval/overall", result.overall, step)
+```
+
+### 健康检查
+
+```bash
+videvalkit doctor    # 设备、bench、metric、profile、能力覆盖、plugin、judge
+```
+
+
 ## 12. 故障排查与常见问题
 
 请先运行 `videvalkit doctor`，多数问题会一目了然。
