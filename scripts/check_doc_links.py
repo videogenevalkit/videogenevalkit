@@ -53,7 +53,7 @@ def strip_code_blocks_and_inline(text: str) -> str:
 def find_docs(root: Path) -> list[Path]:
     """All .md files in scope."""
     paths: list[Path] = []
-    paths.extend((root / "docs").glob("*.md"))
+    paths.extend((root / "docs").rglob("*.md"))  # recurse into wiki/ design/
     if (root / "README.md").exists():
         paths.append(root / "README.md")
     for d in [root / ".claude/skills", root / ".github"]:
