@@ -42,6 +42,7 @@ full flags.
 | `metric show <name>` | Show a metric's registry entry |
 | `metric run --name M --gen-videos / --videos / --ref-videos / --refs / --prompts` | Run a metric |
 | `refs list / show <name> / register --name --path` | Manage reference video sets |
+| `fetch-refs --name <ref> / --all [--dry-run]` | Download a built-in reference set into the fetch cache |
 
 ### `metric run` inputs by kind
 

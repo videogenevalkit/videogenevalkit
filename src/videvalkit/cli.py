@@ -889,6 +889,57 @@ def fetch_smoke_data_cmd(bench: tuple[str, ...], dest: Path | None, dry_run: boo
 
 
 # --------------------------------------------------------------------------- #
+# fetch-refs — pull a built-in reference video set from HuggingFace
+# --------------------------------------------------------------------------- #
+
+@main.command("fetch-refs")
+@click.option("--name", "names", multiple=True,
+              help="Built-in ref name(s) to fetch (repeatable). Omit to use --all.")
+@click.option("--all", "fetch_all", is_flag=True, help="Fetch every built-in ref set.")
+@click.option("--dest", type=click.Path(path_type=Path), default=None,
+              help="Override cache dir (default: $VIDEVALKIT_CACHE_HOME/refs).")
+@click.option("--dry-run", is_flag=True, help="Report what would download without fetching.")
+def fetch_refs_cmd(names: tuple[str, ...], fetch_all: bool,
+                   dest: Path | None, dry_run: bool) -> None:
+    """Download built-in reference video sets for distribution metrics (FVD/VFID/KVD).
+
+    Each set lands in $VIDEVALKIT_CACHE_HOME/refs/<name>, where `metric run
+    --refs <name>` and `refs show` find it. For a local set you already have,
+    use `refs register --name <name> --path <dir>` instead.
+    """
+    from videvalkit.refs.registry import BUILTIN_REFS
+    wanted = set(BUILTIN_REFS) if fetch_all else set(names)
+    if not wanted:
+        raise click.UsageError("specify --name <ref> (repeatable) or --all")
+    unknown = wanted - set(BUILTIN_REFS)
+    if unknown:
+        raise click.UsageError(
+            f"unknown built-in ref(s): {sorted(unknown)}; "
+            f"choose from {sorted(BUILTIN_REFS)}"
+        )
+    root = dest or (_default_cache_root() / "refs")
+    click.echo(f"dest:  {root}")
+    for nm in sorted(wanted):
+        cfg = BUILTIN_REFS[nm]
+        repo = cfg.get("hf_repo")
+        subdir = cfg.get("hf_subdir", nm)
+        target = root / nm
+        click.echo(f"  {nm}: hf:{repo}/{subdir} → {target}  (~{cfg.get('size_gb', '?')} GB)")
+        if dry_run:
+            continue
+        target.mkdir(parents=True, exist_ok=True)
+        from huggingface_hub import snapshot_download
+        snapshot_download(
+            repo_id=repo,
+            repo_type="dataset",
+            local_dir=str(target),
+            allow_patterns=[f"{subdir}/*"],
+        )
+    if not dry_run:
+        click.echo("\n  ✓ refs fetched")
+
+
+# --------------------------------------------------------------------------- #
 # fetch-checkpoints — pull videogenevalkit/checkpoints from HuggingFace
 # --------------------------------------------------------------------------- #
 
