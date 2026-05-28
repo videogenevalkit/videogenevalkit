@@ -56,6 +56,21 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  docs-build:
+    name: Docs build (MkDocs Material + i18n)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install docs deps
+        run: pip install -r requirements-docs.txt
+      - name: mkdocs build --strict
+        # Catches broken links/nav and missing en/zh pages in the bilingual site.
+        run: mkdocs build --strict
+
   unit-tests:
     name: pytest (v0.2 unit + integration)
     runs-on: ubuntu-latest
