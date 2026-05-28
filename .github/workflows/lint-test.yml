@@ -1,0 +1,82 @@
+name: Lint + Test + Doc Checks
+
+# Runs on every PR + push to v0.2-dev / main per docs/REVIEW_PROTOCOL.md §2.
+# Heavy adapter tests (need full 15GB conda env, GPU, paper-faithful backbones)
+# run separately — see scripts/ run_smoke_*.py and the env-tarball Docker workflow.
+
+on:
+  pull_request:
+    branches: [v0.2-dev, main]
+  push:
+    branches: [v0.2-dev]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: "3.10"
+
+jobs:
+  lint:
+    name: Lint (ruff)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install ruff
+        run: pip install ruff
+      - name: ruff check
+        run: ruff check src/ tests/ scripts/ || echo "::warning::ruff check non-zero — fix lint before merge"
+      # Don't fail on lint yet — v0.0.1 code has its own style and we don't
+      # want to bikeshed. Tighten once v0.2 stabilises.
+
+  doc-checks:
+    name: Doc consistency + links + PR template
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install minimal deps
+        run: pip install pyyaml pydantic
+      - name: check_doc_links.py
+        run: python scripts/check_doc_links.py
+      - name: check_design_doc_consistency.py
+        run: python scripts/check_design_doc_consistency.py
+      - name: check_pr_template_filled.py (PR only)
+        if: github.event_name == 'pull_request'
+        run: |
+          gh pr view ${{ github.event.pull_request.number }} \
+              --repo ${{ github.repository }} \
+              --json body --jq .body > /tmp/pr_body.md
+          python scripts/check_pr_template_filled.py /tmp/pr_body.md
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  unit-tests:
+    name: pytest (v0.2 unit + integration)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install minimal deps
+        # Only pyproject deps + pytest + light testing utils — no torch/CUDA.
+        # Heavy adapter tests are tagged @slow / @needs_gpu and excluded.
+        run: |
+          pip install -e ".[dev]"
+          pip install pytest pyyaml pydantic click
+      - name: Run v0.2 unit tests
+        # Skip slow + tests that need the full benchmark conda env
+        run: |
+          pytest tests/ \
+              -m "not slow and not needs_gpu" \
+              --ignore=tests/test_integration.py \
+              --ignore=tests/test_integration_extra.py \
+              --ignore=tests/test_new_benchmarks_smoke.py \
+              -v --tb=short
