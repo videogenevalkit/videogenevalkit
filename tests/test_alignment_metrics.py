@@ -59,12 +59,55 @@ class TestCLIPScoreInputs:
         assert result.n_pairs == 0
 
 
-# ----------------------------------------------------- ViCLIP-Score shell ---
-class TestViCLIPShell:
-    def test_viclip_raises_not_implemented(self, tmp_path):
+# ----------------------------------------------------- ViCLIP-Score inputs ---
+class TestViCLIPInputs:
+    def test_mismatched_lengths_raises(self, tmp_path):
         m = get_metric("viclip-score")
-        with pytest.raises(NotImplementedError, match="ViCLIP backbone fetch"):
-            m.compute(videos=[tmp_path / "v.mp4"], prompts=["a cat"])
+        with pytest.raises(ValueError, match="same length"):
+            m.compute(videos=[tmp_path / "v.mp4"], prompts=["a", "b"])
+
+    def test_empty_input_returns_zero(self):
+        # Empty input short-circuits before the ViCLIP backbone is loaded.
+        m = get_metric("viclip-score")
+        result = m.compute(videos=[], prompts=[])
+        assert result.score == 0.0
+        assert result.n_pairs == 0
+
+
+def test_viclip_middle_frame_indices():
+    from videvalkit.metrics.viclip_score import _middle_frame_indices
+
+    # 8 frames from a 16-frame clip → middles of 8 equal intervals.
+    idxs = _middle_frame_indices(8, 16)
+    assert len(idxs) == 8
+    assert idxs == sorted(idxs)
+    assert all(0 <= i < 16 for i in idxs)
+    # Short clip: still returns exactly num_frames (padded).
+    assert len(_middle_frame_indices(8, 3)) == 8
+
+
+@pytest.mark.needs_gpu
+def test_viclip_score_discriminates(tmp_path):
+    """ViCLIP must score a matched prompt above a mismatched one.
+
+    Requires CUDA + the ViCLIP weight; skipped where either is absent.
+    """
+    import shutil
+
+    from videvalkit.metrics.backbones.viclip_l import resolve_viclip_dir
+
+    if resolve_viclip_dir() is None:
+        pytest.skip("ViCLIP weights not present")
+    src = Path(__file__).parent / "data" / "tiny_clip.mp4"
+    if not src.is_file():
+        pytest.skip("no sample clip available")
+    video = tmp_path / "clip.mp4"
+    shutil.copy(src, video)
+    m = get_metric("viclip-score")
+    matched = m.compute([video], ["the content of this clip"], device="cuda").score
+    wrong = m.compute([video], ["a completely unrelated sentence about taxes"],
+                      device="cuda").score
+    assert -1.0 <= wrong <= matched <= 1.0
 
 
 # ----------------------------------------------------- CLIP-Score functional ---
