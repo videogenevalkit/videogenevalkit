@@ -48,6 +48,9 @@ class FVD(BaseDistributionMetric):
         device: str = "auto",
         allow_tiny_sample: bool = False,
     ) -> DistributionMetricResult:
+        # backbone=None means "default" — we may auto-fall-back to s3d-k400
+        # for monitoring when the paper i3d-k400 weights aren't placed.
+        backbone_explicit = backbone is not None
         bb = backbone or self.canonical_backbone
         if bb not in self.supported_backbones:
             raise ValueError(
@@ -73,12 +76,31 @@ class FVD(BaseDistributionMetric):
         dev = self._resolve_device(device)
 
         if bb == "i3d-k400":
-            # Paper-canonical. Loads local i3d_torchscript.pt if present;
-            # raises a clear FileNotFoundError [→ place weights or use s3d] if not.
-            from videvalkit.metrics.backbones.i3d_k400 import I3DFeatureExtractor
-            extractor = I3DFeatureExtractor(device=dev)
-            backbone_version = "i3d-k400-torchscript [StyleGAN-V convention]"
-            note = "paper-canonical i3d-k400"
+            from videvalkit.metrics.backbones.i3d_k400 import (
+                I3DFeatureExtractor, i3d_weights_path,
+            )
+            if i3d_weights_path() is None and not backbone_explicit:
+                # Default invocation + no i3d weights → auto-fall-back to s3d-k400.
+                # Monitoring [the common case] wants a working trend metric, not
+                # a hard failure. Explicit --backbone i3d-k400 still fails [strict
+                # paper-repro intent].
+                log.warning(
+                    "videvalkit: FVD i3d-k400 weights not found; falling back to "
+                    "s3d-k400 [functional Kinetics-400 backbone]. This is fine for "
+                    "training monitoring / relative comparison. For paper-faithful "
+                    "i3d-FVD, place i3d_torchscript.pt [see backbones/i3d_k400.py] "
+                    "or pass --backbone i3d-k400 explicitly to require it."
+                )
+                bb = "s3d-k400"
+                from videvalkit.metrics.backbones.s3d_k400 import S3DFeatureExtractor
+                extractor = S3DFeatureExtractor(device=dev)
+                backbone_version = "torchvision-S3D_Weights.KINETICS400_V1 [auto-fallback]"
+                note = "s3d-k400 [auto-fallback from i3d default]; trend metric, not paper i3d-FVD"
+            else:
+                # weights present, or explicitly requested → paper-canonical [strict]
+                extractor = I3DFeatureExtractor(device=dev)
+                backbone_version = "i3d-k400-torchscript [StyleGAN-V convention]"
+                note = "paper-canonical i3d-k400"
         else:  # s3d-k400 — functional, torchvision auto-download
             from videvalkit.metrics.backbones.s3d_k400 import S3DFeatureExtractor
             extractor = S3DFeatureExtractor(device=dev)
