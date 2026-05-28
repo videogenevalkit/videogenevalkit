@@ -2,12 +2,11 @@
 
 [← Home](../Home.md)
 
-20 standalone metrics in two tiers. **14 functional, 2 shells, 4 not-yet-registered.**
+20 standalone metrics in two tiers. **16 functional, 4 not-yet-registered.**
 Run any with `videvalkit metric run --name <name>`.
 
-> **Functional** = works today (backbone auto-downloads or is in-env).
-> **Shell** = registered, raises a clear message pending weights/runner.
-> Status as of v0.2-dev.
+> **Functional** = works today (backbone auto-downloads, is in-env, or wraps a
+> staged upstream). Status as of v0.2-dev.
 
 ---
 
@@ -31,7 +30,7 @@ Run any with `videvalkit metric run --name <name>`.
 | Metric | Backbone | Status | Tags |
 |---|---|---|---|
 | `clip-score` | CLIP-ViT-L/14 | ✅ functional | align.text2video |
-| `viclip-score` | ViCLIP | ⚪ shell (weights) | align.text2video, align.prompt_following |
+| `viclip-score` | ViCLIP-L/14 (auto-fetch) | ✅ functional | align.text2video, align.prompt_following |
 
 ### Frame perceptual (2) — lift from vbench, judge-free
 
@@ -49,9 +48,10 @@ Run any with `videvalkit metric run --name <name>`.
 | `subject-consistency` | vbench (DINO) | ✅ functional* | subj.identity, subj.appearance |
 | `background-consistency` | vbench (CLIP) | ✅ functional* | subj.appearance, temp.continuity |
 | `dynamic-degree` | vbench (RAFT) | ✅ functional* | motion.magnitude |
-| `motion-magnitude` | worldscore (SEA-RAFT) | ⚪ shell (runner) | motion.magnitude |
+| `motion-magnitude` | worldscore (SEA-RAFT) | ✅ functional† | motion.magnitude |
 
 *functional given the vbench checkpoints; wraps upstream `VBench.evaluate(dimension_list=[dim])` → bit-exact with the bench path.
+†functional given the worldscore upstream (`$VIDEVALKIT_WORLDSCORE_ROOT` + SEA-RAFT weights); wraps the same `OpticalFlowMetric` call as the bench → bit-exact.
 
 ---
 

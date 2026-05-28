@@ -36,23 +36,19 @@
 
 ---
 
-## v0.2 — remaining (~3%)
+## v0.2 — remaining
 
-All blocked on an external prerequisite:
-
-| Item | Blocker |
+| Item | Status / blocker |
 |---|---|
-| `object-binding` metric | a running VLM judge endpoint |
-| `artifact-diagnostic` metric | judge endpoint + Artifact-Bench taxonomy port |
-| `identity-preservation` metric | `insightface` install decision (shared env) |
-| `motion-accuracy` metric | worldscore SEA-RAFT runner wiring + GPU |
-| `viclip-score` functional | ViCLIP weights hosting |
-| paper-canonical I3D-FVD run | `i3d_torchscript.pt` hosting (loader ready) |
-| `fetch-refs` | `videogenevalkit/reference-videos` HF dataset |
+| `artifact-diagnostic` metric | needs a VLM judge endpoint (code + mock landing; runs once an endpoint is configured) |
+| `object-binding` | **available via the bench** (`eval --bench t2vcompbench --dimensions consistent_attribute`, MLLM-judged). Not a standalone `--videos` metric — re-wraps the same judge call. |
+| `motion-accuracy` | **available via the bench** (`eval --bench worldscore --dimensions motion_accuracy`). Prompt-conditioned (intended motion direction) → inherently bench-only, not a standalone metric. |
+| `identity-preservation` | **deferred to the i2v phase** — its prime use (reference-image identity match) is i2v-adjacent, out of v0.2 T2V scope. |
+| paper-canonical I3D-FVD run | `i3d_torchscript.pt` hosting (loader ready; S3D fallback covers monitoring) |
+| `fetch-refs` cross-machine | `videogenevalkit/reference-videos` HF dataset upload (command shipped; `refs register` is the zero-download local path) |
 
-Unblocking levers: **start a judge endpoint** (→ object-binding + artifact-diagnostic),
-**install insightface** (→ identity-preservation), **host I3D + ViCLIP weights**
-(→ paper FVD + viclip-score).
+Unblocking levers: **start a judge endpoint** (→ artifact-diagnostic), **host the
+I3D torchscript weight** (→ paper-canonical FVD).
 
 ---
 
@@ -60,8 +56,7 @@ Unblocking levers: **start a judge endpoint** (→ object-binding + artifact-dia
 
 | | Count | Which |
 |---|---|---|
-| ✅ functional | 14 | fvd, vfid, kvd, clip-fvd, clip-score, 7 vbench lifts, numeracy, spatial-relationship |
-| ⚪ shell | 2 | viclip-score, motion-magnitude |
+| ✅ functional | 16 | fvd, vfid, kvd, clip-fvd, clip-score, viclip-score, 7 vbench lifts, motion-magnitude, numeracy, spatial-relationship |
 | ⛔ not registered | 4 | object-binding, motion-accuracy, identity-preservation, artifact-diagnostic |
 
 See [Metrics Reference](reference/Metrics.md) for detail.
