@@ -51,6 +51,10 @@ where = ["src"]
 "videvalkit" = ["benchmarks/*/prompts/*.txt", "benchmarks/*/prompts/*.json", "benchmarks/*/prompts/*.jsonl", "benchmarks/*/prompts/*/*.txt"]
 
 [tool.pytest.ini_options]
+markers = [
+  "slow: slow tests needing model load",
+  "needs_gpu: tests needing GPU + checkpoints",
+]
 testpaths = ["tests"]
 filterwarnings = [
     "ignore::DeprecationWarning",
