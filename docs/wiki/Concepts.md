@@ -1,6 +1,6 @@
 # Core Concepts
 
-[← Home](Home.md)
+[← Home](../index.md)
 
 The mental model in five ideas. Everything else is detail.
 

@@ -1,10 +1,10 @@
-# Architecture
+# 架构
 
-[← Home](../index.md)
+[← 首页](../index.md)
 
 ---
 
-## Layered design
+## 分层设计
 
 ```
 ┌────────────────────────────────────────────────────────────────────┐
@@ -12,91 +12,91 @@
 │     eval · eval-suite · metric · capabilities · refs · estimate ·    │
 │     watch · doctor · list                                            │
 ├────────────────────────────────────────────────────────────────────┤
-│ L6  Orchestration                                                    │
+│ L6  编排(Orchestration)                                            │
 │     runner.run · resolve_judge · resolve_profile · plugin.discover · │
 │     scheduler (env / GPU / HTTP)                                     │
 ├────────────────────────────────────────────────────────────────────┤
-│ L5  Registries (lazy-merged: builtin + user + plugins)              │
+│ L5  注册表(惰性合并:内置 + 用户 + 插件)                         │
 │     SUPPORTED_BENCHMARKS · SUPPORTED_JUDGES · SUPPORTED_METRICS ·    │
 │     SUPPORTED_AGGREGATORS · capability taxonomy                      │
 ├────────────────────────────────────────────────────────────────────┤
-│ L4  Plugin discovery                                                 │
+│ L4  插件发现                                                         │
 │     builtin → pip entry_points → ~/.videvalkit/ → $CWD/.videvalkit/  │
 ├────────────────────────────────────────────────────────────────────┤
-│ L3  Core abstractions                                                │
+│ L3  核心抽象                                                         │
 │     BaseBenchmark · BaseScorer · BaseDistributionMetric ·            │
 │     BaseAggregator · ManifestBenchmark · Profile · Subset · Capability│
 ├────────────────────────────────────────────────────────────────────┤
-│ L2  Adapters & metrics                                               │
-│     10 benchmark adapters · 20 metrics · 3 judge backends ·          │
-│     shared backbones (S3D / I3D / InceptionV3 / CLIP)                │
+│ L2  适配器与指标                                                     │
+│     10 个基准适配器 · 20 个指标 · 3 个评审后端 ·                     │
+│     共享骨干网络 (S3D / I3D / InceptionV3 / CLIP)                    │
 ├────────────────────────────────────────────────────────────────────┤
-│ L1  Infrastructure                                                   │
+│ L1  基础设施                                                         │
 │     Workspace · ApiCallLogger · FrameCache · frechet/mmd utils       │
 ├────────────────────────────────────────────────────────────────────┤
-│ L0  External                                                         │
-│     upstream paper repos · HF (checkpoints / refs) · VLM endpoints   │
+│ L0  外部                                                             │
+│     上游论文仓库 · HF (checkpoints / refs) · VLM 端点                │
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-Each layer depends only on the one below. Adding a metric/bench/judge touches
-L2 (implementation) + L5 (one registry row) — nothing else.
+每一层只依赖其下一层。新增一个指标/基准/评审只触及
+L2(实现)+ L5(一行注册表)——别无其他。
 
 ---
 
-## The four registries
+## 四个注册表
 
-| Registry | Holds | Merge sources |
+| 注册表 | 存放 | 合并来源 |
 |---|---|---|
-| `SUPPORTED_BENCHMARKS` | bench adapters + dim_tags + judge slots | builtin + plugins |
-| `SUPPORTED_JUDGES` | judge configs | builtin + `judges.yaml` |
-| `SUPPORTED_METRICS` | metric specs (kind/source/tags/backbone) | builtin + plugins |
-| `SUPPORTED_AGGREGATORS` | cross-prompt aggregators | builtin |
+| `SUPPORTED_BENCHMARKS` | 基准适配器 + dim_tags + 评审槽位 | 内置 + 插件 |
+| `SUPPORTED_JUDGES` | 评审配置 | 内置 + `judges.yaml` |
+| `SUPPORTED_METRICS` | 指标规格(kind/source/tags/backbone) | 内置 + 插件 |
+| `SUPPORTED_AGGREGATORS` | 跨 prompt 聚合器 | 内置 |
 
-All are **lazy-merged at import**: built-in entries plus anything discovered
-from user config / plugins. Same-name → later source wins (logged at INFO).
+全部在**导入时惰性合并**:内置条目加上从用户配置 / 插件发现的一切。
+同名 → 后来的来源胜出(以 INFO 级别记录)。
 
 ---
 
-## Plugin model
+## 插件模型
 
-Three layers, lowest precedence first:
+三层,优先级从低到高:
 
-1. **Built-in** — `src/videvalkit/{benchmarks,metrics}/`
+1. **内置** — `src/videvalkit/{benchmarks,metrics}/`
 2. **pip entry_points** — `[project.entry-points."videvalkit.benchmarks"]`
-3. **Local dirs** — `~/.videvalkit/<group>/` then `$CWD/.videvalkit/<group>/`
+3. **本地目录** — `~/.videvalkit/<group>/` 然后 `$CWD/.videvalkit/<group>/`
 
-Local plugins use the `__videvalkit_register__()` convention. Disable all
-third-party sources with `VIDEVALKIT_DISABLE_PLUGINS=1`.
+本地插件使用 `__videvalkit_register__()` 约定。用
+`VIDEVALKIT_DISABLE_PLUGINS=1` 禁用所有第三方来源。
 
 ---
 
-## Two benchmark integration tracks
+## 两条基准集成路线
 
-| Track | When | How |
+| 路线 | 何时 | 怎么做 |
 |---|---|---|
-| **A — Manifest** | simple: prompt → scorer → score | one `manifest.yaml` ([Extending](guides/Extending.md)) |
-| **B — Python adapter** | complex: staging / multi-stage / subprocess | `BaseBenchmark` subclass |
+| **A — Manifest** | 简单:prompt → scorer → score | 一个 `manifest.yaml`([扩展](guides/Extending.md)) |
+| **B — Python 适配器** | 复杂:暂存 / 多阶段 / 子进程 | `BaseBenchmark` 子类 |
 
-Both converge on the same runner / workspace / scheduler.
+两者最终汇聚到同一个 runner / workspace / scheduler。
 
 ---
 
-## Shared metric infrastructure
+## 共享指标基础设施
 
-| Module | Purpose |
+| 模块 | 用途 |
 |---|---|
-| `metrics/utils/frechet.py` | Fréchet distance (FVD / VFID / CLIP-FVD), float64 |
-| `metrics/utils/mmd.py` | polynomial-kernel MMD² (KVD) |
-| `metrics/backbones/s3d_k400.py` | S3D Kinetics-400 video features |
-| `metrics/backbones/i3d_k400.py` | I3D-K400 torchscript loader (paper FVD) |
-| `metrics/backbones/clip_vit.py` | CLIP-ViT frame features |
+| `metrics/utils/frechet.py` | Fréchet 距离 (FVD / VFID / CLIP-FVD),float64 |
+| `metrics/utils/mmd.py` | 多项式核 MMD²(KVD) |
+| `metrics/backbones/s3d_k400.py` | S3D Kinetics-400 视频特征 |
+| `metrics/backbones/i3d_k400.py` | I3D-K400 torchscript 加载器(论文版 FVD) |
+| `metrics/backbones/clip_vit.py` | CLIP-ViT 帧特征 |
 
 ---
 
-## Design archives
+## 设计存档
 
-The original design documents (rationale, trade-offs, decision snapshots) live in
-[`docs/design/`](../design/PRODUCT_DESIGN.md): PRODUCT, JUDGE_SELECTION, INTEGRATION_FRAMEWORK,
-VIDEO_METRICS, QUICK_EVAL, CAPABILITY_TAGS, REVIEW_PROTOCOL, NPU_ADAPTATION.
-The wiki is the operational reference; the design docs explain *why*.
+原始设计文档(理念、权衡、决策快照)位于
+[`docs/design/`](../design/PRODUCT_DESIGN.md):PRODUCT、JUDGE_SELECTION、INTEGRATION_FRAMEWORK、
+VIDEO_METRICS、QUICK_EVAL、CAPABILITY_TAGS、REVIEW_PROTOCOL、NPU_ADAPTATION。
+wiki 是可操作的参考;设计文档解释*为什么*。

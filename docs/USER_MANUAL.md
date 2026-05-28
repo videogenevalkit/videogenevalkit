@@ -1,6 +1,6 @@
 # videvalkit User Manual
 
-> 📖 **The [wiki](wiki/Home.md) is the primary, up-to-date user docs.** This manual is the longer-form v0.0.1 install/run reference; the v0.2 features [judge selection, profiles, metrics, capabilities, training monitor] are in §11.9 here and fully in the wiki guides.
+> 📖 **The [wiki](index.md) is the primary, up-to-date user docs.** This manual is the longer-form v0.0.1 install/run reference; the v0.2 features [judge selection, profiles, metrics, capabilities, training monitor] are in §11.9 here and fully in the wiki guides.
 
 | Field | Value |
 |---|---|

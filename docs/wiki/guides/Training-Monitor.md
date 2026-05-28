@@ -1,6 +1,6 @@
 # Guide: Training Monitor
 
-[← Home](../Home.md)
+[← Home](../../index.md)
 
 Run a quick eval every N training steps to track quality trends — without
 shelling out or blocking the loop.

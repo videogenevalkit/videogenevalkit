@@ -1,0 +1,121 @@
+site_name: videogenevalkit
+site_description: Unified evaluation toolkit for text-to-video generation
+repo_url: https://github.com/videogenevalkit/videogenevalkit
+repo_name: videogenevalkit
+docs_dir: docs
+use_directory_urls: true
+
+theme:
+  name: material
+  language: en
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - toc.follow
+
+plugins:
+  - search
+  - i18n:
+      docs_structure: suffix
+      reconfigure_material: true
+      reconfigure_search: true
+      languages:
+        - locale: en
+          default: true
+          name: English
+          build: true
+        - locale: zh
+          name: 中文
+          build: true
+          nav_translations:
+            Start here: 开始
+            Guides: 指南
+            Reference: 参考
+            Project: 项目
+            Design archive: 设计存档
+            Manuals: 手册
+            Home: 首页
+            Getting Started: 快速上手
+            Core Concepts: 核心概念
+            Judge Selection: 评审选择
+            Profiles & Quick Eval: 配置档与快速评测
+            Training Monitor: 训练监控
+            Extending: 扩展
+            CLI: 命令行
+            Benchmarks: 基准
+            Metrics: 指标
+            Judges: 评审
+            Capability Tags: 能力标签
+            Architecture: 架构
+            Roadmap: 路线图
+            Contributing: 贡献指南
+            User Manual: 用户手册
+            Developer Manual: 开发手册
+            Test Manual: 测试手册
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - footnotes
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Start here:
+      - Getting Started: wiki/Getting-Started.md
+      - Core Concepts: wiki/Concepts.md
+  - Guides:
+      - Judge Selection: wiki/guides/Judge-Selection.md
+      - Profiles & Quick Eval: wiki/guides/Profiles-and-Quick-Eval.md
+      - Training Monitor: wiki/guides/Training-Monitor.md
+      - Extending: wiki/guides/Extending.md
+  - Reference:
+      - CLI: wiki/reference/CLI.md
+      - Benchmarks: wiki/reference/Benchmarks.md
+      - Metrics: wiki/reference/Metrics.md
+      - Judges: wiki/reference/Judges.md
+      - Capability Tags: wiki/reference/Capability-Tags.md
+  - Project:
+      - Architecture: wiki/Architecture.md
+      - Roadmap: wiki/Roadmap.md
+      - Contributing: wiki/Contributing.md
+  - Design archive:
+      - Product: design/PRODUCT_DESIGN.md
+      - Judge Selection: design/JUDGE_SELECTION_DESIGN.md
+      - Integration Framework: design/INTEGRATION_FRAMEWORK_DESIGN.md
+      - Video Metrics: design/VIDEO_METRICS_DESIGN.md
+      - Quick Eval: design/QUICK_EVAL_DESIGN.md
+      - Capability Tags: design/CAPABILITY_TAGS_DESIGN.md
+      - Review Protocol: design/REVIEW_PROTOCOL.md
+      - NPU Adaptation: design/NPU_ADAPTATION_DESIGN.md
+  - Manuals:
+      - User Manual: USER_MANUAL.md
+      - Developer Manual: DEV_MANUAL.md
+      - Test Manual: TEST_MANUAL.md

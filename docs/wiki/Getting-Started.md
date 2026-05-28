@@ -1,6 +1,6 @@
 # Getting Started
 
-[← Home](Home.md)
+[← Home](../index.md)
 
 ---
 

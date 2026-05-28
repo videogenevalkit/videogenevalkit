@@ -1,6 +1,6 @@
 # Guide: Extending
 
-[← Home](../Home.md)
+[← Home](../../index.md)
 
 Add a metric, benchmark, or judge — without forking. Three plugin sources:
 built-in, pip `entry_points`, or local `~/.videvalkit/`.

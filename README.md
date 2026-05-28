@@ -4,7 +4,7 @@
 
 One config, one entrypoint, three ways to evaluate. Score your model across **10 benchmarks**, **20 standalone metrics**, or **44 capability tags** — pick a benchmark, a single metric, or a whole ability, with the **judge of your choice**. Benchmark scores compare byte-for-byte against official leaderboards.
 
-> 📖 **Full documentation: [docs/wiki/Home.md](docs/wiki/Home.md)** — getting started, guides, CLI/metrics/benchmarks/judges reference, architecture, roadmap. Design rationale archived in docs/design/.
+> 📖 **Full documentation: [docs/index.md](docs/index.md)** — getting started, guides, CLI/metrics/benchmarks/judges reference, architecture, roadmap. Design rationale archived in docs/design/.
 
 <p align="left">
   <a href="#quickstart"><img alt="quickstart" src="https://img.shields.io/badge/quickstart-30%20min-blue"></a>
@@ -62,7 +62,7 @@ Plus 3 supplementary adapters (Physics-IQ, VBench++, V-ReasonBench).
 | **Capability tags** | 44-tag vocab; `videvalkit capabilities list/show/eval` |
 | **Plugin-first** | add a metric/bench/judge via YAML / pip / `~/.videvalkit/` — no fork |
 
-See **[docs/wiki/Home.md](docs/wiki/Home.md)** for the full picture.
+See **[docs/index.md](docs/index.md)** for the full picture.
 
 **8 VLM/LLM judges** out of the box (`SUPPORTED_JUDGES`): local vLLM (Gemma-4-31B-IT, Qwen3-32B, Qwen3-VL-32B, LLaVA-Video-7B) + managed APIs (Gemini, GPT-4o, Claude). User-configurable endpoints via `~/.config/videvalkit/judges.yaml`.
 
@@ -162,7 +162,7 @@ videvalkit aggregate --workspace ~/runs/worldjen/ws
 
 ## Running examples for all 7 benchmarks
 
-Worldjen (above) needs no local checkpoints. Four others each pull a specific checkpoint from `videogenevalkit/checkpoints` on HuggingFace; `semantics_axis` is judge-only. Full step-by-step recipes in [`docs/USER_MANUAL_en.md` §6](docs/USER_MANUAL_en.md).
+Worldjen (above) needs no local checkpoints. Four others each pull a specific checkpoint from `videogenevalkit/checkpoints` on HuggingFace; `semantics_axis` is judge-only. Full step-by-step recipes in [`docs/USER_MANUAL.md` §6](docs/USER_MANUAL.md).
 
 | # | Bench / dim | Scorer | Ckpt fetch (`videogenevalkit/checkpoints`) | Wallclock (3 vids) | GPU mem | Expected score |
 |---|---|---|---|---:|---:|---|
@@ -206,7 +206,7 @@ See [`docs/DEV_MANUAL.md §14`](docs/DEV_MANUAL.md#14-standalone-metrics-module-
 | Doc | What's in it |
 |---|---|
 | [`README.md`](README.md) | (you are here) overview + quickstart |
-| [`docs/USER_MANUAL_en.md`](docs/USER_MANUAL_en.md) / [`docs/USER_MANUAL_cn.md`](docs/USER_MANUAL_cn.md) | end-user how-to: install, configure judges, run each benchmark |
+| [`docs/USER_MANUAL.md`](docs/USER_MANUAL.md) / [`docs/USER_MANUAL.zh.md`](docs/USER_MANUAL.zh.md) | end-user how-to: install, configure judges, run each benchmark |
 | [`docs/DEV_MANUAL.md`](docs/DEV_MANUAL.md) | architecture: object model, module layout, packaging plan |
 | [`docs/TEST_MANUAL.md`](docs/TEST_MANUAL.md) | validation results per benchmark with Δ vs leaderboard, tolerance bands, known discrepancies |
 

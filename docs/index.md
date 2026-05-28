@@ -3,8 +3,8 @@
 **Unified evaluation toolkit for text-to-video generation.**
 One CLI · one workspace · one schema. 10 benchmarks · 8+ judges · 20 metrics · 44 capability tags.
 
-> Status: `v0.2-dev` · 24 PRs merged · 363 tests green · ~97% of v0.2 scope.
-> This wiki is the primary documentation. Design rationale lives in [`docs/design/`](../design/).
+> Status: `v0.2-dev` · 384 tests green · v0.2 nearly complete.
+> This wiki is the primary documentation. Design rationale lives in [`docs/design/`](design/PRODUCT_DESIGN.md).
 
 ---
 
@@ -12,10 +12,10 @@ One CLI · one workspace · one schema. 10 benchmarks · 8+ judges · 20 metrics
 
 | Section | Pages |
 |---|---|
-| **Start here** | [Getting Started](Getting-Started.md) · [Core Concepts](Concepts.md) |
-| **Guides** | [Judge Selection](guides/Judge-Selection.md) · [Profiles & Quick Eval](guides/Profiles-and-Quick-Eval.md) · [Training Monitor](guides/Training-Monitor.md) · [Extending](guides/Extending.md) |
-| **Reference** | [CLI](reference/CLI.md) · [Benchmarks](reference/Benchmarks.md) · [Metrics](reference/Metrics.md) · [Judges](reference/Judges.md) · [Capability Tags](reference/Capability-Tags.md) |
-| **Project** | [Architecture](Architecture.md) · [Roadmap & Status](Roadmap.md) · [Contributing](Contributing.md) |
+| **Start here** | [Getting Started](wiki/Getting-Started.md) · [Core Concepts](wiki/Concepts.md) |
+| **Guides** | [Judge Selection](wiki/guides/Judge-Selection.md) · [Profiles & Quick Eval](wiki/guides/Profiles-and-Quick-Eval.md) · [Training Monitor](wiki/guides/Training-Monitor.md) · [Extending](wiki/guides/Extending.md) |
+| **Reference** | [CLI](wiki/reference/CLI.md) · [Benchmarks](wiki/reference/Benchmarks.md) · [Metrics](wiki/reference/Metrics.md) · [Judges](wiki/reference/Judges.md) · [Capability Tags](wiki/reference/Capability-Tags.md) |
+| **Project** | [Architecture](wiki/Architecture.md) · [Roadmap & Status](wiki/Roadmap.md) · [Contributing](wiki/Contributing.md) |
 
 ### Full documentation map
 
@@ -24,7 +24,7 @@ This wiki is the current, operational reference. Two other doc sets exist:
 | Doc set | Location | Status | Use for |
 |---|---|---|---|
 | **Wiki** (this) | `docs/wiki/` | ✅ current (v0.2) | day-to-day usage, reference, architecture |
-| **Manuals** | `docs/DEV_MANUAL.md` · `TEST_MANUAL.md` · `USER_MANUAL_{en,cn}.md` | ⚠️ v0.0.1-era + banners | deep architecture rationale (DEV), paper-alignment validation tables (TEST), long-form install (USER) |
+| **Manuals** | `docs/DEV_MANUAL.md` · `TEST_MANUAL.md` · `USER_MANUAL.md` (en/zh) | ⚠️ v0.0.1-era + banners | deep architecture rationale (DEV), paper-alignment validation tables (TEST), long-form install (USER) |
 | **Design archive** | `docs/design/` | 🔒 frozen | *why* each v0.2 subsystem was built the way it is (8 design docs + slide deck) |
 
 > Rule of thumb: **need to *do* something → wiki**; **need to know *why* → design**; **need validation numbers → TEST_MANUAL**.
@@ -70,4 +70,4 @@ videvalkit metric run --name fvd --gen-videos gen/ --refs my-ref --allow-tiny-sa
 videvalkit capabilities eval motion --videos gen/
 ```
 
-See [Getting Started](Getting-Started.md) for the full walkthrough.
+See [Getting Started](wiki/Getting-Started.md) for the full walkthrough.

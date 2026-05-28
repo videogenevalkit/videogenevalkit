@@ -1,29 +1,29 @@
-# Guide: Profiles & Quick Eval
+# 指南:配置档与快速评测
 
-[← Home](../../index.md)
+[← 首页](../../index.md)
 
-Profiles trade accuracy for speed. They control the prompt subset, frame
-sampling, and samples-per-prompt — orthogonal to which judge you use.
+配置档用精度换速度。它们控制 prompt 子集、帧采样和每个 prompt 的样本数——
+与你使用哪个评审正交。
 
 ---
 
-## The three profiles
+## 三个配置档
 
-| Profile | Subset | Frames | Samples | Wallclock | Use |
+| 配置档 | 子集 | 帧数 | 样本数 | 墙钟时间 | 用途 |
 |---|---|---|---|---|---|
-| `quick` | small | 4 | 1 | ~5–10 min | training monitor, smoke, CI |
-| `standard` | medium | 8 | 1 | ~30–60 min | ablation, iteration |
-| `full` | full | 8 | 5 | hours | paper / leaderboard (default) |
+| `quick` | 小 | 4 | 1 | ~5–10 分钟 | 训练监控、冒烟、CI |
+| `standard` | 中 | 8 | 1 | ~30–60 分钟 | 消融、迭代 |
+| `full` | 全 | 8 | 5 | 数小时 | 论文 / 榜单(默认) |
 
 ```bash
 videvalkit eval --bench vbench --profile quick --videos gen/ --workspace ws/
 ```
 
-No `--profile` = `full` (back-compatible).
+不带 `--profile` = `full`(向后兼容)。
 
 ---
 
-## Estimate cost first
+## 先估算成本
 
 ```bash
 videvalkit estimate --bench vbench --bench worldjen --profile quick --judge gpt-4o
@@ -40,34 +40,34 @@ TOTAL                            14.0 min     0.15            60
 
 ---
 
-## Run several benchmarks at once
+## 一次跑多个基准
 
 ```bash
 videvalkit eval-suite --all-anchored --profile quick \
   --videos gen/ --workspace ws/
 
-# or pick + skip judge benches
+# 或者挑选 + 跳过需评审的基准
 videvalkit eval-suite --bench vbench --bench worldjen --no-judge \
   --videos gen/ --workspace ws/
 ```
 
 ---
 
-## Custom subsets
+## 自定义子集
 
 ```bash
 videvalkit eval --bench vbench --subset my_subset.json --videos gen/ --workspace ws/
 ```
 
-A subset is a version-pinned JSON of prompt_ids with calibration metadata
-(Spearman ρ vs full). `--subset` overrides the profile's default subset.
+子集是一份版本锁定的 prompt_id JSON,带校准元数据(相对全集的 Spearman ρ)。
+`--subset` 覆盖配置档的默认子集。
 
 ---
 
-## Paper-faithful = full + paper judge
+## 论文忠实 = full + paper 评审
 
 ```bash
 videvalkit eval --bench t2vcompbench --profile full --judge paper ...
 ```
 
-For training-time monitoring instead, see [Training Monitor](Training-Monitor.md).
+如果是训练期监控,请参见[训练监控](Training-Monitor.md)。

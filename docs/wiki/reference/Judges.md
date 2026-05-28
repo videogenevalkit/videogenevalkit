@@ -1,6 +1,6 @@
 # Judges Reference
 
-[← Home](../Home.md)
+[← Home](../../index.md)
 
 A *judge* is a VLM/LLM that scores semantic dimensions. Judges are pluggable
 registry entries; the same endpoint can serve multiple benchmarks.

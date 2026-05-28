@@ -509,7 +509,7 @@ $ videvalkit validate bench my_bench
 [4/7] evaluate() with mock judge           ✓ (12 raw results)
 [5/7] aggregate() schema                   ✓
 [6/7] default_judge resolvable             ✓ (gemma-4-31b-local)
-[7/7] doc presence                          ⚠ docs/USER_MANUAL_en.md missing § my_bench
+[7/7] doc presence                          ⚠ docs/USER_MANUAL.md missing § my_bench
 
 OK with 1 warning. Run `videvalkit validate bench my_bench --strict` to treat warnings as errors.
 ```

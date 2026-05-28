@@ -1,6 +1,6 @@
 # Capability Tags Reference
 
-[← Home](../Home.md)
+[← Home](../../index.md)
 
 A fixed **44-tag** controlled vocabulary (10 top-level + 34 sub) tags every
 metric and benchmark-dimension, enabling evaluation **by ability**.
