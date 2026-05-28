@@ -669,6 +669,176 @@ def capabilities_eval_cmd(
 
 
 # --------------------------------------------------------------------------- #
+# metric — list / show / run standalone metrics
+# (per VIDEO_METRICS_DESIGN.md §7)
+# --------------------------------------------------------------------------- #
+
+@main.group("metric")
+def metric_group() -> None:
+    """List / show / run standalone metrics [FVD, CLIP-Score, lifts, ...]."""
+
+
+@metric_group.command("list")
+@click.option("--kind", default=None, help="Filter by kind.")
+@click.option("--no-judge", is_flag=True, help="Only judge-free metrics.")
+@click.option("--source", default=None, help="Filter by source prefix.")
+def metric_list_cmd(kind: str | None, no_judge: bool, source: str | None) -> None:
+    """List registered metrics."""
+    from videvalkit.metrics import SUPPORTED_METRICS, list_metrics
+    names = list_metrics(kind=kind, no_judge=no_judge, source=source)
+    click.echo(f"{'metric':<24}  {'kind':<26}  {'judge?':<6}  source")
+    click.echo("-" * 86)
+    for n in names:
+        c = SUPPORTED_METRICS[n]
+        jm = "VLM" if c.get("needs_judge") else "—"
+        exp = " *" if c.get("experimental") else ""
+        click.echo(f"{n + exp:<24}  {c.get('kind', '?'):<26}  {jm:<6}  "
+                   f"{c.get('source', '')}")
+
+
+@metric_group.command("show")
+@click.argument("name")
+def metric_show_cmd(name: str) -> None:
+    """Show a metric's registry entry."""
+    from videvalkit.metrics import metric_info
+    try:
+        info = metric_info(name)
+    except KeyError as e:
+        click.echo(f"ERROR: {e}", err=True)
+        raise SystemExit(2)
+    for k, v in info.items():
+        click.echo(f"  {k:24s}  {v}")
+
+
+@metric_group.command("run")
+@click.option("--name", required=True)
+@click.option("--gen-videos", type=click.Path(exists=True, path_type=Path),
+              help="Generated videos dir [or --videos for non-distribution].")
+@click.option("--videos", type=click.Path(exists=True, path_type=Path),
+              help="Videos dir for per-video / per-prompt metrics.")
+@click.option("--ref-videos", type=click.Path(exists=True, path_type=Path),
+              help="Reference videos dir [distribution metrics].")
+@click.option("--refs", default=None, help="Named reference set [see refs list].")
+@click.option("--prompts", type=click.Path(exists=True, path_type=Path),
+              help="prompts.jsonl for per-prompt metrics.")
+@click.option("--device", default="auto",
+              type=click.Choice(["auto", "cuda", "cpu", "npu"]))
+@click.option("--allow-tiny-sample", is_flag=True,
+              help="Bypass the small-N error guard for distribution metrics.")
+@click.option("--output", type=click.Path(path_type=Path), default=None)
+def metric_run_cmd(
+    name: str, gen_videos: Path | None, videos: Path | None,
+    ref_videos: Path | None, refs: str | None, prompts: Path | None,
+    device: str, allow_tiny_sample: bool, output: Path | None,
+) -> None:
+    """Run a single metric and print/save its result."""
+    from videvalkit.metrics import SUPPORTED_METRICS, get_metric
+
+    if name not in SUPPORTED_METRICS:
+        click.echo(f"ERROR: unknown metric {name!r}", err=True)
+        raise SystemExit(2)
+    cfg = SUPPORTED_METRICS[name]
+    kind = cfg.get("kind", "")
+    m = get_metric(name)
+
+    def _list_videos(d: Path) -> list[Path]:
+        exts = {".mp4", ".mov", ".webm", ".avi", ".mkv"}
+        return sorted(p for p in d.rglob("*") if p.suffix.lower() in exts)
+
+    try:
+        if kind == "distribution_reference":
+            if gen_videos is None:
+                raise click.UsageError("distribution metric needs --gen-videos")
+            ref_dir = ref_videos
+            if ref_dir is None and refs:
+                from videvalkit.refs.registry import resolve_ref_path
+                ref_dir = resolve_ref_path(refs)
+            if ref_dir is None:
+                raise click.UsageError("distribution metric needs --ref-videos or --refs")
+            result = m.compute(
+                gen_videos=_list_videos(gen_videos),
+                ref_videos=_list_videos(Path(ref_dir)),
+                device=device, allow_tiny_sample=allow_tiny_sample,
+            )
+        elif kind == "per_prompt_reference_free":
+            vdir = videos or gen_videos
+            if vdir is None or prompts is None:
+                raise click.UsageError(
+                    "per-prompt metric needs --videos and --prompts")
+            import json as _json
+            vids, texts = [], []
+            with open(prompts) as f:
+                recs = [_json.loads(l) for l in f if l.strip()]
+            # naive pairing by order against sorted video files
+            vfiles = _list_videos(Path(vdir))
+            for vf, rec in zip(vfiles, recs):
+                vids.append(vf); texts.append(rec.get("text", ""))
+            result = m.compute(videos=vids, prompts=texts)
+        else:  # per_video_reference_free
+            vdir = videos or gen_videos
+            if vdir is None:
+                raise click.UsageError("per-video metric needs --videos")
+            result = m.compute(_list_videos(Path(vdir)))
+    except NotImplementedError as e:
+        click.echo(f"NOT YET FUNCTIONAL: {e}", err=True)
+        raise SystemExit(3)
+
+    payload = result.model_dump() if hasattr(result, "model_dump") else result
+    out_str = json.dumps(payload, indent=2, ensure_ascii=False, default=str)
+    if output:
+        output.write_text(out_str)
+        click.echo(f"wrote {output}")
+    else:
+        click.echo(out_str)
+
+
+# --------------------------------------------------------------------------- #
+# refs — reference video set management (per VIDEO_METRICS_DESIGN.md §8)
+# --------------------------------------------------------------------------- #
+
+@main.group("refs")
+def refs_group() -> None:
+    """Manage reference video sets for distribution metrics."""
+
+
+@refs_group.command("list")
+def refs_list_cmd() -> None:
+    """List built-in + user-registered reference sets."""
+    from videvalkit.refs.registry import get_refs
+    refs = get_refs()
+    click.echo(f"{'name':<26}  {'clips':>7}  source")
+    click.echo("-" * 60)
+    for name, c in refs.items():
+        n = c.get("n_clips", "?")
+        src = c.get("path") or f"hf:{c.get('hf_repo', '')}"
+        click.echo(f"{name:<26}  {str(n):>7}  {src}")
+
+
+@refs_group.command("show")
+@click.argument("name")
+def refs_show_cmd(name: str) -> None:
+    from videvalkit.refs.registry import get_refs
+    refs = get_refs()
+    if name not in refs:
+        click.echo(f"ERROR: unknown ref {name!r}", err=True)
+        raise SystemExit(2)
+    for k, v in refs[name].items():
+        click.echo(f"  {k:16s}  {v}")
+
+
+@refs_group.command("register")
+@click.option("--name", required=True)
+@click.option("--path", required=True, type=click.Path(exists=True, path_type=Path))
+@click.option("--description", default="")
+def refs_register_cmd(name: str, path: Path, description: str) -> None:
+    """Register a local directory as a named reference set."""
+    from videvalkit.refs.registry import register_ref
+    yaml_path = register_ref(name, path, description)
+    click.echo(f"registered ref {name!r} → {path}")
+    click.echo(f"  saved to {yaml_path}")
+
+
+# --------------------------------------------------------------------------- #
 # fetch-smoke-data — pull videogenevalkit/smoke-data from HuggingFace
 # --------------------------------------------------------------------------- #
 

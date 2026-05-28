@@ -31,12 +31,13 @@ class KVD(BaseDistributionMetric):
         clip_sampling: dict | None = None,
         seed: int = 42,
         device: str = "auto",
+        allow_tiny_sample: bool = False,
     ) -> DistributionMetricResult:
         bb = backbone or self.canonical_backbone
         if bb not in self.supported_backbones:
             raise ValueError(f"backbone {bb!r} not supported for KVD")
         warning = self.check_sample_size(len(gen_videos), self.min_recommended_samples)
-        if warning and warning.startswith("ERROR:"):
+        if warning and warning.startswith("ERROR:") and not allow_tiny_sample:
             raise ValueError(warning + " Pass --allow-tiny-sample to override.")
         raise NotImplementedError(
             "KVD compute() awaits I3D-K400 backbone fetch [v0.2 follow-up]. "
