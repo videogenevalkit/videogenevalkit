@@ -257,4 +257,33 @@ SUPPORTED_METRICS: dict[str, dict[str, Any]] = {
         notes="Different algorithm from vbench/dynamic-degree [SEA-RAFT vs RAFT].",
     ),
 
+
+    # ============================================================
+    # Specialized lift-outs from t2vcompbench [GroundingDINO CV, judge-free]
+    # ============================================================
+    "numeracy": dict(
+        kind="per_prompt_reference_free",
+        source="t2vcompbench/generative_numeracy",
+        cls="videvalkit.metrics.t2vcompbench_dim:Numeracy",
+        needs_judge=False, compute_kind="local_vision",
+        tags=["comp.numeracy", "obj.count"],
+        inputs=["videos", "prompts"], output_kind="scalar_per_pair",
+        algorithm="GroundingDINO object-count vs prompt number [upstream t2vcompbench]",
+        also_used_by=["t2vcompbench"],
+        paper_alignment_test="tests/test_metric_lift_bit_exact.py",
+        license="research-only (t2vcompbench)", version="1.0",
+    ),
+    "spatial-relationship": dict(
+        kind="per_prompt_reference_free",
+        source="t2vcompbench/spatial_relationships",
+        cls="videvalkit.metrics.t2vcompbench_dim:SpatialRelationship",
+        needs_judge=False, compute_kind="local_vision",
+        tags=["comp.spatial"],
+        inputs=["videos", "prompts"], output_kind="scalar_per_pair",
+        algorithm="GroundingDINO + Depth-Anything bbox geometry [upstream t2vcompbench]",
+        also_used_by=["t2vcompbench"],
+        paper_alignment_test="tests/test_metric_lift_bit_exact.py",
+        license="research-only (t2vcompbench)", version="1.0",
+    ),
+
 }
