@@ -79,8 +79,6 @@ def load_viclip(device: str = "cuda"):
     Returns (model, tokenizer). Raises FileNotFoundError if weights are absent
     and not downloadable.
     """
-    import torch
-
     from ..third_party.viclip.simple_tokenizer import SimpleTokenizer
     from ..third_party.viclip.viclip import ViCLIP
 
@@ -98,7 +96,8 @@ def load_viclip(device: str = "cuda"):
         raise FileNotFoundError(
             f"ViCLIP tokenizer {TOKENIZER_FILE!r} not found next to weight in {wdir}"
         )
-    dev = device if torch.cuda.is_available() else "cpu"
+    from ..utils.device import resolve_device
+    dev = resolve_device(device)
     tokenizer = SimpleTokenizer(str(tok_path))
     model = ViCLIP(tokenizer=tokenizer, pretrain=str(wdir / WEIGHT_FILE))
     model = model.to(dev).eval()

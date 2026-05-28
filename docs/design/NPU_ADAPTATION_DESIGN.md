@@ -1,7 +1,13 @@
-# NPU Adaptation — Design (Deferred)
+# NPU Adaptation — Design (Mostly deferred)
 
-> **Status: deferred.** Not on the short-term roadmap. This stub records the intent
-> and the constraints so the work can be picked up later without re-discovery.
+> **Status: mostly deferred.** Full benchmark NPU support is not on the
+> short-term roadmap. **Partial plumbing has landed**: the device-agnostic
+> canonical metrics (FVD / VFID / KVD / CLIP-FVD / CLIP-Score / ViCLIP-Score)
+> resolve `--device npu` through `metrics/utils/device.py` (`resolve_device`),
+> importing `torch_npu` to register the backend and falling back to cpu with a
+> warning when it is absent. This is **untested on real Ascend hardware** (the
+> dev box is CUDA-only) — verify on-device before reporting NPU numbers. The rest
+> of this stub records the intent and constraints for the remaining work.
 
 ---
 
