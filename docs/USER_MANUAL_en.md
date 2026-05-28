@@ -1097,6 +1097,120 @@ The leaderboard is only meaningful with **2+ models** in the workspace — the z
 
 ---
 
+## 11.9 v0.2 capabilities — judge selection, profiles, metrics, capability tags, training monitor
+
+> Added in v0.2. These features layer on top of the `eval` workflow above.
+
+### Switching the VLM judge
+
+Each benchmark declares a `default_judge` and a `paper_judge`. Pick one with `--judge`:
+
+```bash
+videvalkit eval --bench worldjen --judge default          # cheap / validated
+videvalkit eval --bench t2vcompbench --judge paper        # paper-faithful (LLaVA-1.6-34B)
+videvalkit eval --bench worldjen --judge claude-sonnet-4-6 # any registry name
+```
+
+Add your own endpoint without forking — drop a `~/.config/videvalkit/judges.yaml`:
+
+```yaml
+judges:
+  my-cluster-qwen3-vl:
+    kind: openai_compatible
+    endpoint: http://10.20.30.40:8005/v1
+    model: Qwen/Qwen3-VL-32B-Instruct
+    provider: Qwen
+    api_key_env: null
+```
+
+Or hit an endpoint ad-hoc (no registration):
+
+```bash
+videvalkit eval --bench worldjen \
+  --judge-endpoint http://10.0.0.5:8003/v1 \
+  --judge-model google/gemma-4-31b-it \
+  --judge-kind openai_compatible
+```
+
+No judge endpoint at all? Run only judge-free benches/metrics:
+
+```bash
+videvalkit list benchmarks --no-judge      # 4 benches need no VLM
+videvalkit eval --bench vbench --no-judge  # fails fast if the bench needs a judge
+```
+
+### Eval profiles — quick / standard / full
+
+```bash
+videvalkit eval --bench vbench --profile quick      # ~5-10 min, trend monitoring
+videvalkit eval --bench vbench --profile standard   # ~30-60 min, ablation
+videvalkit eval --bench vbench --profile full       # full corpus (default; paper)
+videvalkit estimate --bench vbench --bench worldjen --profile quick   # cost preview
+```
+
+`--profile full --judge paper` is the paper-faithful reproduction lane.
+
+### Standalone metrics
+
+Run a single metric without the benchmark scaffolding:
+
+```bash
+videvalkit metric list --no-judge                  # 16+ metrics, filterable
+videvalkit metric show fvd
+videvalkit metric run --name clip-score --videos gen/ --prompts prompts.jsonl
+videvalkit metric run --name fvd --gen-videos gen/ --refs ucf101-fvd --backbone s3d-k400
+videvalkit metric run --name motion-smoothness --videos gen/
+```
+
+Reference sets for distribution metrics (FVD/VFID/KVD):
+
+```bash
+videvalkit refs list
+videvalkit refs register --name my-ref --path /data/my_reference_videos/
+videvalkit metric run --name vfid --gen-videos gen/ --refs my-ref
+```
+
+### Capability tags — evaluate by ability, not by bench
+
+Every metric/bench-dim carries capability tags. Run all metrics for one ability:
+
+```bash
+videvalkit capabilities list                       # 10 top-level + 34 sub
+videvalkit capabilities show motion                # who contributes
+videvalkit capabilities eval motion --videos gen/  # cross-metric capability score
+```
+
+### Multi-bench + training-loop monitoring
+
+```bash
+# Run several benches into one workspace
+videvalkit eval-suite --all-anchored --profile quick --videos gen/ --workspace ws/
+
+# Watch a checkpoint dir; eval each new model as it appears
+videvalkit watch --videos-pattern '/runs/r42/checkpoints/step_*/samples' \
+  --bench vbench --profile quick --workspace ws/
+```
+
+In a training script:
+
+```python
+from videvalkit.training import monitor, MonitorConfig
+cfg = MonitorConfig(benches=["vbench"], profile="quick", workspace="ws/")
+for step in range(0, 100_000, 1000):
+    if step % 5000 == 0:
+        prompts = monitor.preview_prompts(cfg)           # which prompts to generate
+        videos = generate_videos(prompts)
+        result = monitor.eval(videos, model_name=f"step_{step}", cfg=cfg)
+        tb.add_scalar("eval/overall", result.overall, step)
+```
+
+### Health check
+
+```bash
+videvalkit doctor    # devices, benches, metrics, profiles, capability coverage, plugins, judges
+```
+
+
 ## 12. Troubleshooting and FAQ
 
 Run `videvalkit doctor` first; it surfaces most issues at a glance.

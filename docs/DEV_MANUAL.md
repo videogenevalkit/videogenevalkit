@@ -1259,7 +1259,7 @@ The weight tarball is large (~ 200 GB full); we recommend splitting into "minimu
 
 ## 9. User Manual
 
-> **The user-facing how-to-run content has moved to [USER_MANUAL.md](USER_MANUAL.md).** That document covers installation, starting VLM backends, workspace preparation, running evaluations, customizing the inputs (videos / prompts / dimensions / judge), and troubleshooting.
+> **The user-facing how-to-run content has moved to [USER_MANUAL.md](USER_MANUAL_en.md).** That document covers installation, starting VLM backends, workspace preparation, running evaluations, customizing the inputs (videos / prompts / dimensions / judge), and troubleshooting.
 >
 > The remainder of this DEV_MANUAL focuses on architecture, module decisions, and the engineering rigor that backs releases. The pipeline-verification framework that used to live in TEST_MANUAL §3.2 is now in [§9b below](#9b-pipeline-verification-framework).
 
@@ -1267,7 +1267,7 @@ The weight tarball is large (~ 200 GB full); we recommend splitting into "minimu
 
 | You want to … | Doc to read |
 |---|---|
-| Install the toolkit, run a benchmark, customize inputs | [USER_MANUAL.md](USER_MANUAL.md) |
+| Install the toolkit, run a benchmark, customize inputs | [USER_MANUAL.md](USER_MANUAL_en.md) |
 | Know what each metric measures and which paper it reproduces | [TEST_MANUAL.md](TEST_MANUAL.md) |
 | Know what scores we got and how they align with the leaderboard | [TEST_MANUAL.md](TEST_MANUAL.md) |
 | Understand the architecture, module boundaries, design tradeoffs | this document (§1–§8) |
@@ -1446,7 +1446,7 @@ A Benchmark whose fingerprint has not been re-emitted in 30 days is considered s
 
 ---
 
-> The legacy §9 user-manual subsections below are kept temporarily for backward-compatibility with bookmarks. New readers should use [USER_MANUAL.md](USER_MANUAL.md).
+> The legacy §9 user-manual subsections below are kept temporarily for backward-compatibility with bookmarks. New readers should use [USER_MANUAL.md](USER_MANUAL_en.md).
 
 ### 9.1 Installation
 

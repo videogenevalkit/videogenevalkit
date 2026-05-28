@@ -6,7 +6,7 @@
 | Version | v0.3 |
 | Status | Working spec |
 | Last revised | 2026-05-14 (per-dim restructure: each Benchmark dimension now carries example prompt, what is evaluated, method, pretrained checkpoint, and expected result) |
-| Companion docs | [DEV_MANUAL.md](DEV_MANUAL.md) (architecture · pipeline verification framework) · [USER_MANUAL.md](USER_MANUAL.md) (how to run) |
+| Companion docs | [DEV_MANUAL.md](DEV_MANUAL.md) (architecture · pipeline verification framework) · [USER_MANUAL.md](USER_MANUAL_en.md) (how to run) |
 | Audience | Researchers reading "what does this number measure?" · Release engineers verifying paper reproduction · Adapter authors wiring a new Benchmark |
 
 This manual answers four questions, per Benchmark:
@@ -16,7 +16,7 @@ This manual answers four questions, per Benchmark:
 3. **Which algorithm and pretrained checkpoint** scores each dimension?
 4. **What does an expected/passing result look like** on each dimension?
 
-For *how to run* an evaluation, see [USER_MANUAL](USER_MANUAL.md). For *architectural decisions and the pipeline-verification framework*, see [DEV_MANUAL](DEV_MANUAL.md).
+For *how to run* an evaluation, see [USER_MANUAL](USER_MANUAL_en.md). For *architectural decisions and the pipeline-verification framework*, see [DEV_MANUAL](DEV_MANUAL.md).
 
 ---
 
@@ -135,7 +135,7 @@ Failure modes if these are mixed up:
 - "Our model scored 0.85, paper's Gen-3 scored 0.88 — close!" → meaningless if our 0.85 was on our prompts and 0.88 was on VBench's 946 prompts.
 - A Stage-2 verification on the wrong prompt set "passes" → you have validated a wrong pipeline; subsequent Stage-3 numbers from it are invalid but you do not know.
 
-The toolkit's `--prompts-file` option is the user-facing knob that controls which track is taken; the [USER_MANUAL §8.2](USER_MANUAL.md#82-choosing-the-prompt-set) walks through the decision.
+The toolkit's `--prompts-file` option is the user-facing knob that controls which track is taken; the [USER_MANUAL §8.2](USER_MANUAL_en.md#82-choosing-the-prompt-set) walks through the decision.
 
 ---
 
@@ -1312,4 +1312,4 @@ The `validation/expected/*.json` files are the source of truth for paper numbers
 
 ---
 
-> End of test manual. Pairs with [DEV_MANUAL.md](DEV_MANUAL.md) (architecture), [USER_MANUAL.md](USER_MANUAL.md) (how to run).
+> End of test manual. Pairs with [DEV_MANUAL.md](DEV_MANUAL.md) (architecture), [USER_MANUAL.md](USER_MANUAL_en.md) (how to run).
