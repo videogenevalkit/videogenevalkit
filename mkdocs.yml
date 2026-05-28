@@ -1,5 +1,6 @@
 site_name: videogenevalkit
 site_description: Unified evaluation toolkit for text-to-video generation
+site_url: https://videogenevalkit.github.io/videogenevalkit/
 repo_url: https://github.com/videogenevalkit/videogenevalkit
 repo_name: videogenevalkit
 docs_dir: docs
