@@ -1,0 +1,63 @@
+# videvalkit conda env — Ascend NPU (910B) variant.  DRAFT / TEMPLATE.
+#
+# This env runs the DEVICE-AGNOSTIC subset of the toolkit on Ascend NPU:
+#   * canonical metrics: fvd · vfid · kvd · clip-fvd · clip-score · viclip-score
+#   * easy-tier vbench lifts (via the torch_npu .cuda()->npu shim):
+#       temporal-flickering · subject-consistency · background-consistency
+#       aesthetic-quality · imaging-quality
+# NOT supported on NPU (CUDA-only custom kernels — keep these on a CUDA box):
+#   detectron2 / lietorch / droid_backends, GroundingDINO deformable-attn,
+#   SEA-RAFT alt_cuda_corr → so worldscore / t2vcompbench CV dims, vbench
+#   detection dims, motion-accuracy are excluded here.
+#
+# ⚠️ UNVERIFIED on real 910B hardware (the dev box is CUDA-only). Versions below
+#    are PLACEHOLDERS — pin them to YOUR installed CANN version. After creating
+#    the env, run `bash scripts/post_install_npu.sh` then
+#    `python scripts/npu_smoke.py` and iterate from the report.
+#
+# Host prerequisites (NOT installed by this yaml):
+#   * Ascend 910B + driver + firmware
+#   * CANN toolkit + kernels installed and sourced
+#       source /usr/local/Ascend/ascend-toolkit/set_env.sh
+#   * Linux aarch64 (most 910B hosts) or x86_64 — pick matching wheels
+#   * conda
+#
+# Install:
+#   conda env create -f envs/videvalkit-npu.yaml -p /opt/videvalkit-npu
+#   conda activate /opt/videvalkit-npu
+#   source /usr/local/Ascend/ascend-toolkit/set_env.sh   # CANN env vars
+#   bash scripts/post_install_npu.sh                      # torch + torch_npu + app deps
+#   pip install --no-deps -e .
+#   python scripts/npu_smoke.py                           # on-device report
+name: videvalkit-npu
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - ffmpeg                       # runners shell out to ffprobe/ffmpeg
+  - pip:
+      # torch + torch_npu are version-locked to CANN; install them in
+      # post_install_npu.sh (NOT here) so the right Ascend wheels are picked.
+      #
+      # Pure-python / device-agnostic deps the easy-tier metrics need:
+      - numpy>=1.24
+      - scipy>=1.10              # frechet sqrtm (CPU, float64)
+      - opencv-python>=4.8
+      - Pillow>=10.0
+      - tqdm>=4.66
+      - einops>=0.7             # ViCLIP
+      - ftfy                    # CLIP tokenizer
+      - regex
+      - timm>=0.9               # pyiqa / ViCLIP backbones
+      - transformers>=4.40
+      - huggingface_hub>=0.24
+      # toolkit core deps (mirror pyproject)
+      - pydantic>=2.5
+      - aiohttp>=3.9
+      - pyyaml>=6.0
+      - click>=8.1
+      - requests>=2.31
+      # decord (video IO): pip wheel is x86_64-only. On aarch64 910B hosts,
+      # build from source or use `eva-decord` — see post_install_npu.sh.
+      # openai-clip, pyiqa, torchvision, torch, torch_npu → post_install_npu.sh
