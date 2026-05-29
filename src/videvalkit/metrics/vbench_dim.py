@@ -25,7 +25,6 @@ from __future__ import annotations
 import logging
 import tempfile
 from pathlib import Path
-from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -95,10 +94,11 @@ class VBenchDimMetric:
                 "env. This lift metric wraps upstream VBench."
             ) from e
 
-        # Resolve device
-        if device == "auto":
-            from videvalkit.core.device import get_device
-            device = get_device().type if _has_device_module() else _fallback_device()
+        # Resolve device. resolve_device activates the torch_npu shim when the
+        # device resolves to npu, so the upstream VBench scorer's hardcoded
+        # .cuda() calls land on Ascend.
+        from videvalkit.core.device import resolve_device
+        device = resolve_device(device)
 
         # Normalize videos → a directory upstream can read
         videos_dir = self._stage_videos(videos)
@@ -169,22 +169,6 @@ class VBenchDimMetric:
                     if isinstance(vr, (int, float)):
                         per_video[str(vp)] = float(vr)
         return per_video, mean
-
-
-def _has_device_module() -> bool:
-    try:
-        import videvalkit.core.device  # noqa
-        return True
-    except ImportError:
-        return False
-
-
-def _fallback_device() -> str:
-    try:
-        import torch
-        return "cuda" if torch.cuda.is_available() else "cpu"
-    except ImportError:
-        return "cpu"
 
 
 # Concrete per-dim classes [so registry cls paths resolve to distinct types].
