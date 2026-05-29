@@ -39,3 +39,20 @@ design blocks it later.
 
 When demand materializes, scope this as its own milestone with a device-coverage
 matrix per benchmark dimension.
+
+## Environment (910B)
+
+A separate env keeps the CUDA env clean. Draft template + installer:
+
+- `envs/videvalkit-npu.yaml` — conda env (python 3.10 + ffmpeg + device-agnostic
+  pip deps); versions are placeholders to pin to the host's CANN release.
+- `scripts/post_install_npu.sh` — installs torch + `torch_npu` (CANN-matched) +
+  the torch-dependent deps (openai-clip, pyiqa, decord/eva-decord); `INSTALL_VBENCH=1`
+  adds the lifted vbench dims.
+- `scripts/npu_smoke.py` — on-device PASS/FAIL report for the easy-tier metrics
+  (run after install).
+
+Easy-tier on NPU = the 6 canonical metrics + 5 vbench lifts (temporal-flickering,
+subject/background-consistency, aesthetic/imaging-quality). The `.cuda()`→npu
+redirect is handled by `core.device.ensure_npu_runtime()`
+(`torch_npu.contrib.transfer_to_npu`), activated when a device resolves to npu.

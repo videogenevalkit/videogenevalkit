@@ -33,3 +33,19 @@
 - **配置档/子集**原样沿用;只是计算后端不同。
 
 需求出现时,把它作为独立里程碑立项,并为每个基准维度建一份设备覆盖矩阵。
+
+## 环境(910B)
+
+独立 env 保持 CUDA 环境干净。草稿模板 + 安装器:
+
+- `envs/videvalkit-npu.yaml` — conda env(python 3.10 + ffmpeg + 设备无关 pip 依赖);
+  版本为占位符,需按宿主机 CANN 版本固定。
+- `scripts/post_install_npu.sh` — 安装 torch + `torch_npu`(与 CANN 匹配)+ 依赖
+  torch 的包(openai-clip、pyiqa、decord/eva-decord);`INSTALL_VBENCH=1` 加上抽出的
+  vbench 维度。
+- `scripts/npu_smoke.py` — 安装后在设备上跑,输出易档指标的 PASS/FAIL 报告。
+
+NPU 易档 = 6 个 canonical 指标 + 5 个 vbench lift(temporal-flickering、
+subject/background-consistency、aesthetic/imaging-quality)。`.cuda()`→npu 重定向由
+`core.device.ensure_npu_runtime()`(`torch_npu.contrib.transfer_to_npu`)处理,
+设备解析为 npu 时激活。
