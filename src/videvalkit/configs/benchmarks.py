@@ -198,13 +198,20 @@ DIM_TAGS_BY_BENCH: dict[str, dict[str, list[str]]] = {
         "structural_gestalt":       ["vq.aesthetic", "style.consistency"],
     },
     "worldscore": {
-        # all CV (SLAM + RAFT + SAM); intrinsic motion/style/temp — no align
-        "motion_magnitude":         ["motion.magnitude"],
-        "motion_accuracy":          ["motion.accuracy", "align.action_verb", "align.text2video"],
+        # 10 official dims (7 static + 3 dynamic). CV-heavy (DROID-SLAM /
+        # RAFT / SAM / IQA). Prompt-conditioned dims gain align.text2video.
+        # static
         "camera_control":           ["motion.magnitude", "align.text2video"],
-        "3d_consistency":           ["temp.scene_consistency"],
-        "subject_consistency":      ["subj.identity"],
-        "style":                    ["style.consistency"],
+        "object_control":           ["obj.presence", "align.text2video"],
+        "content_alignment":        ["align.text2video", "align.prompt_following"],
+        "3d_consistency":           ["temp.scene_consistency", "phys.kinematics"],
+        "photometric_consistency":  ["temp.continuity", "vq.imaging"],
+        "style_consistency":        ["style.consistency"],
+        "subjective_quality":       ["vq.aesthetic", "vq.imaging"],
+        # dynamic
+        "motion_accuracy":          ["motion.accuracy", "align.action_verb", "align.text2video"],
+        "motion_magnitude":         ["motion.magnitude"],
+        "motion_smoothness":        ["motion.smoothness"],
     },
     "t2vcompbench": {
         # all 7 dims check prompt-following (4 MLLM-judged + 3 CV) → all get align
@@ -219,8 +226,46 @@ DIM_TAGS_BY_BENCH: dict[str, dict[str, list[str]]] = {
     "physics_iq": {
         "physics_iq":               ["phys.gravity", "phys.kinematics", "phys.causality"],
     },
-    "vbench_pp": {},
-    "v_reasonbench": {},
+    "vbench_pp": {
+        # VBench++ = VBench v1 (16, tagged under 'vbench' above) + 4 I2V extras
+        # + 5 Trustworthiness dims. Only the 9 NEW dims are listed here;
+        # capability lookups under --bench vbench_pp need to consult both keys.
+        # I2V extras
+        "i2v_subject":              ["subj.identity", "align.text2video"],
+        "i2v_background":           ["subj.appearance", "temp.continuity", "align.text2video"],
+        "camera_motion":            ["motion.magnitude", "align.text2video"],
+        "video_image_consistency":  ["subj.appearance", "align.text2video"],
+        # Trustworthiness — content-safety / bias / refusal; no canonical
+        # capability fit beyond intrinsic content. Tag with vq.artifact_free
+        # as a stand-in for 'unsafe outputs detected'; trust is a separate
+        # axis the 44-tag taxonomy doesn't model and shouldn't pretend to.
+        "culture_fairness":         ["vq.artifact_free"],
+        "gender_bias":              ["vq.artifact_free"],
+        "skin_tone_bias":           ["vq.artifact_free"],
+        "content_safety":           ["vq.artifact_free"],
+        "refusal_rate":             ["vq.artifact_free"],
+    },
+    "v_reasonbench": {
+        # 13 deterministic reasoning verifiers in 4 categories. None map
+        # cleanly to the visual capability vocab; tag by closest aspect.
+        # structured_problem_solving (combinatorial / numeric reasoning)
+        "tic_tac_toe":              ["comp.numeracy", "comp.spatial"],
+        "sudoku":                   ["comp.numeracy"],
+        "n_queens":                 ["comp.numeracy", "comp.spatial"],
+        "tower_of_hanoi":           ["comp.numeracy", "phys.causality"],
+        # spatial_cognition
+        "color_connection":         ["comp.spatial", "obj.attribute"],
+        "maze_navigation":          ["comp.spatial", "motion.accuracy"],
+        "shape_matching":           ["comp.spatial", "obj.attribute"],
+        # pattern_inference
+        "rule_following":           ["align.prompt_following"],
+        "sequence_continuation":    ["align.prompt_following", "temp.continuity"],
+        # physical_dynamics
+        "block_sliding":            ["phys.kinematics", "phys.causality"],
+        "domino_chain":             ["phys.causality", "phys.kinematics"],
+        "pendulum":                 ["phys.gravity", "phys.kinematics"],
+        "projectile":               ["phys.gravity", "phys.kinematics"],
+    },
     "semantics_axis": {
         # ALL 21 axes are VLM prompt-following; every axis gets the pair
         # (align.text2video, align.prompt_following) + aspect.
