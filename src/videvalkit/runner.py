@@ -94,9 +94,36 @@ def run(
     ws = Workspace(workspace)
     sched = Scheduler(scheduler_config or SchedulerConfig())
 
-    # Stage out the inputs link in case caller pointed at a different dir.
-    if Path(videos).resolve() != ws.layout.videos_dir.resolve():
-        adapter_kwargs.setdefault("external_videos_dir", str(Path(videos).resolve()))
+    # Auto-stage videos into the workspace layout when --videos points elsewhere.
+    # Bench adapters look for videos at <workspace>/videos/<model>/*.mp4 (the
+    # layout the scheduler/resume machinery is built around). No adapter today
+    # honors external_videos_dir, so we symlink the external --videos tree into
+    # the workspace ourselves — one symlink covers all benches uniformly.
+    ext = Path(videos).resolve()
+    ws_videos = ws.layout.videos_dir.resolve()
+    if ext != ws_videos:
+        adapter_kwargs.setdefault("external_videos_dir", str(ext))
+        ws_videos.mkdir(parents=True, exist_ok=True)
+        children = [p for p in ext.iterdir() if p.is_dir()] if ext.is_dir() else []
+        if children:
+            # Standard layout: <ext>/<model>/*.mp4 — symlink each model dir.
+            for src in children:
+                dst = ws_videos / src.name
+                if dst.is_symlink() or dst.exists():
+                    if dst.is_symlink() and dst.resolve() == src:
+                        continue
+                    dst.unlink() if dst.is_symlink() or dst.is_file() else None
+                dst.symlink_to(src)
+        elif ext.is_dir():
+            # Flat dir of *.mp4 (no model subdir). Stage under the first model
+            # the caller named, or 'default' if none. Lets `metric run`-style
+            # flat inputs still work via the bench path.
+            model_name = (models or ["default"])[0]
+            dst = ws_videos / model_name
+            if dst.is_symlink() or dst.exists():
+                dst.unlink() if dst.is_symlink() else None
+            if not dst.exists():
+                dst.symlink_to(ext)
 
     # Profile-level overrides flow through to adapters via kwargs so each
     # benchmark adapter can honor them (frame_sampling, samples_per_prompt).
