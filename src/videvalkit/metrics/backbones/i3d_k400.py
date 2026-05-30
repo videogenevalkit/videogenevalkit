@@ -36,6 +36,10 @@ def i3d_weights_path() -> Path | None:
     env = os.environ.get("VIDEVALKIT_FVD_I3D_PATH")
     if env:
         candidates.append(Path(env))
+    # Site-shared ckpt root (set up by scripts/setup_ckpt_dir.sh).
+    ckpt_home = os.environ.get("VIDEVALKIT_CKPT_HOME")
+    if ckpt_home:
+        candidates.append(Path(ckpt_home) / "i3d" / "i3d_torchscript.pt")
     cache_home = os.environ.get(
         "VIDEVALKIT_CACHE_HOME", str(Path.home() / ".cache" / "videvalkit")
     )
