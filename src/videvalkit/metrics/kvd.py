@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 class KVD(BaseDistributionMetric):
     name = "kvd"
     canonical_backbone = "i3d-k400"
-    supported_backbones = ["i3d-k400", "s3d-k400"]
+    supported_backbones = ["i3d-k400", "s3d-k400", "videomae-base"]
     min_recommended_samples = 50
     requires_reference = True
 
@@ -73,7 +73,13 @@ class KVD(BaseDistributionMetric):
         clip_cfg = clip_sampling or {"n_frames": 16, "resize": 224}
         dev = self._resolve_device(device)
 
-        if bb == "i3d-k400":
+        if bb == "videomae-base":
+            from videvalkit.metrics.backbones.videomae import (
+                VideoMAEFeatureExtractor,
+            )
+            extractor = VideoMAEFeatureExtractor(device=dev)
+            note = "videomae-base: ViT-B/16 motion-semantic transformer"
+        elif bb == "i3d-k400":
             from videvalkit.metrics.backbones.i3d_k400 import (
                 I3DFeatureExtractor, i3d_weights_path,
             )
