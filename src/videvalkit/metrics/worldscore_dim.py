@@ -77,6 +77,13 @@ class MotionMagnitude:
         if not vids:
             return MotionMagnitudeResult(score=0.0, per_video={}, n_videos=0)
 
+        # Resolve the requested device through the canonical helper. The
+        # OpticalFlowScorer currently auto-detects internally, but calling
+        # resolve_device here activates the torch_npu shim when device='npu'
+        # so the scorer's hardcoded .cuda() calls redirect to Ascend.
+        from videvalkit.core.device import resolve_device
+        resolve_device(device)
+
         scorer = self._ensure_scorer()
         per_video: dict[str, float] = {}
         scores: list[float] = []

@@ -66,13 +66,8 @@ class _T2VCompLift:
         self._scorer = None
 
     def _resolve_device(self) -> str:
-        if self._requested_device != "auto":
-            return self._requested_device
-        try:
-            import torch
-            return "cuda" if torch.cuda.is_available() else "cpu"
-        except ImportError:
-            return "cpu"
+        from videvalkit.core.device import resolve_device
+        return resolve_device(self._requested_device)
 
     def _build_meta(self, prompt: str) -> dict[str, Any]:  # pragma: no cover - overridden
         raise NotImplementedError
