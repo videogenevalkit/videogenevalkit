@@ -113,8 +113,13 @@ SUPPORTED_BENCHMARKS = {
 # annotated incrementally as their dim implementations land. Missing entries
 # are permitted but flagged by the coverage report.
 # ---------------------------------------------------------------------------
+# Convention: a dim that is VLM/judge-scored AND checks whether the prompt's
+# content appears in the video carries ``align.text2video`` IN ADDITION to its
+# aspect tag(s). Intrinsic-quality dims (aesthetics / physics / smoothness)
+# stay aspect-only. Pure prompt-following axes also get ``align.prompt_following``.
 DIM_TAGS_BY_BENCH: dict[str, dict[str, list[str]]] = {
     "vbench": {
+        # intrinsic / CV (no prompt-checking) — aspect only
         "subject_consistency":      ["subj.identity"],
         "background_consistency":   ["subj.appearance", "temp.continuity"],
         "temporal_flickering":      ["temp.flickering"],
@@ -122,56 +127,125 @@ DIM_TAGS_BY_BENCH: dict[str, dict[str, list[str]]] = {
         "dynamic_degree":           ["motion.magnitude"],
         "aesthetic_quality":        ["vq.aesthetic"],
         "imaging_quality":          ["vq.imaging"],
-        "object_class":             ["obj.presence"],
-        "multiple_objects":         ["comp.multi_object", "obj.count"],
-        "human_action":             ["align.action_verb"],
-        "color":                    ["obj.attribute"],
-        "spatial_relationship":     ["comp.spatial"],
-        "scene":                    ["comp.multi_object"],
-        "appearance_style":         ["style.consistency"],
-        "temporal_style":           ["style.consistency", "temp.scene_consistency"],
-        "overall_consistency":      ["align.prompt_following"],
+        # prompt-checking (CV/VLM verifies prompt content in video) — add align
+        "object_class":             ["obj.presence", "align.text2video"],
+        "multiple_objects":         ["comp.multi_object", "obj.count", "align.text2video"],
+        "human_action":             ["align.action_verb", "align.text2video"],
+        "color":                    ["obj.attribute", "align.text2video"],
+        "spatial_relationship":     ["comp.spatial", "align.text2video"],
+        "scene":                    ["comp.multi_object", "align.text2video"],
+        "appearance_style":         ["style.consistency", "align.text2video"],
+        "temporal_style":           ["style.consistency", "temp.scene_consistency", "align.text2video"],
+        "overall_consistency":      ["align.prompt_following", "align.text2video"],
     },
     "vbench2": {
-        # 18 dims across 5 categories — full mapping deferred to v0.2 M3 work;
-        # cover the most common ones for capability resolver demonstration:
-        "Camera_Motion":            ["motion.magnitude"],
-        "Human_Anatomy":            ["phys.anatomy"],
-        "Motion_Order":             ["motion.accuracy", "phys.causality"],
-        "Multi-View_Consistency":   ["temp.scene_consistency"],
+        # Creativity / Commonsense — intrinsic
+        "Composition":              ["style.consistency", "vq.aesthetic"],
         "Diversity":                ["style.consistency"],
+        "Instance_Preservation":    ["subj.identity", "temp.continuity"],
+        "Motion_Rationality":       ["phys.kinematics", "phys.causality"],
+        # Controllability — prompt-following → align
+        "Camera_Motion":            ["motion.magnitude", "align.text2video"],
+        "Complex_Landscape":        ["comp.multi_object", "align.text2video"],
+        "Complex_Plot":             ["comp.multi_object", "align.text2video"],
+        "Dynamic_Attribute":        ["obj.attribute", "align.text2video"],
+        "Dynamic_Spatial_Relationship": ["comp.spatial", "align.text2video"],
+        "Human_Interaction":        ["comp.multi_object", "align.text2video"],
+        "Motion_Order_Understanding": ["motion.accuracy", "align.text2video"],
+        # Human Fidelity — intrinsic (anatomical correctness)
+        "Human_Anatomy":            ["phys.anatomy"],
+        "Human_Clothes":            ["subj.appearance", "phys.anatomy"],
+        "Human_Identity":           ["subj.identity", "subj.character"],
+        # Physics — intrinsic
+        "Material":                 ["phys.kinematics"],
+        "Mechanics":                ["phys.gravity", "phys.kinematics", "phys.causality"],
+        "Multi-View_Consistency":   ["temp.scene_consistency"],
+        "Thermotics":               ["phys.kinematics", "phys.causality"],
     },
     "videobench": {
+        # static / dynamic — intrinsic
+        "imaging_quality":          ["vq.imaging"],
+        "aesthetic_quality":        ["vq.aesthetic"],
+        "temporal_consistency":     ["temp.continuity", "temp.flickering"],
+        "motion_effects":           ["motion.smoothness", "motion.naturalness"],
+        # alignment category — all VLM prompt-checking
         "video_text_consistency":   ["align.text2video", "align.prompt_following"],
-        "action_consistency":       ["align.action_verb"],
-        "object_consistency":       ["obj.presence"],
-        "color_consistency":        ["obj.attribute"],
+        "object_class_consistency": ["obj.presence", "align.text2video"],
+        "color_consistency":        ["obj.attribute", "align.text2video"],
+        "action_consistency":       ["align.action_verb", "align.text2video"],
+        "scene_consistency":        ["comp.multi_object", "align.text2video"],
     },
     "worldjen": {
-        # 16 dims in 4 categories — partial mapping for v0.2.
-        # Full mapping in M3 lift-out work.
+        # motion_stability — intrinsic
+        "subject_consistency":      ["subj.identity"],
+        "scene_consistency":        ["temp.scene_consistency", "subj.appearance"],
+        "motion_smoothness":        ["motion.smoothness"],
+        "temporal_flickering":      ["temp.flickering"],
+        "inertial_consistency":     ["phys.kinematics", "motion.naturalness"],
+        # logic_physics — intrinsic
+        "physical_mechanics":       ["phys.gravity", "phys.kinematics", "phys.causality"],
+        "object_permanence":        ["obj.presence", "temp.continuity"],
+        "human_fidelity":           ["phys.anatomy", "subj.character"],
+        "dynamic_degree":           ["motion.magnitude"],
+        # instruction_adherence — pure alignment
+        "semantic_adherence":       ["align.text2video", "align.prompt_following"],
+        "spatial_relationship":     ["comp.spatial", "align.text2video"],
+        "semantic_drift":           ["align.text2video", "temp.scene_consistency"],
+        # aesthetic_quality — intrinsic
+        "composition_framing":      ["vq.aesthetic", "style.consistency"],
+        "lighting_volumetric":      ["vq.imaging"],
+        "color_harmony":            ["vq.aesthetic"],
+        "structural_gestalt":       ["vq.aesthetic", "style.consistency"],
     },
     "worldscore": {
+        # all CV (SLAM + RAFT + SAM); intrinsic motion/style/temp — no align
         "motion_magnitude":         ["motion.magnitude"],
-        "motion_accuracy":          ["motion.accuracy", "align.action_verb"],
-        "camera_control":           ["motion.magnitude"],
+        "motion_accuracy":          ["motion.accuracy", "align.action_verb", "align.text2video"],
+        "camera_control":           ["motion.magnitude", "align.text2video"],
         "3d_consistency":           ["temp.scene_consistency"],
         "subject_consistency":      ["subj.identity"],
         "style":                    ["style.consistency"],
     },
     "t2vcompbench": {
-        "object_binding":           ["obj.binding", "obj.presence"],
-        "spatial_relationship":     ["comp.spatial"],
-        "numeracy":                 ["comp.numeracy", "obj.count"],
-        "consistent_attribute":     ["obj.attribute"],
-        "motion_binding":           ["motion.accuracy", "align.action_verb"],
+        # all 7 dims check prompt-following (4 MLLM-judged + 3 CV) → all get align
+        "consistent_attribute":     ["obj.attribute", "align.text2video", "align.prompt_following"],
+        "dynamic_attribute":        ["obj.attribute", "align.text2video", "align.prompt_following"],
+        "action_binding":           ["align.action_verb", "align.text2video"],
+        "object_interactions":      ["comp.multi_object", "align.text2video"],
+        "spatial_relationships":    ["comp.spatial", "align.text2video"],
+        "generative_numeracy":      ["comp.numeracy", "obj.count", "align.text2video"],
+        "motion_binding":           ["motion.accuracy", "align.action_verb", "align.text2video"],
     },
     "physics_iq": {
         "physics_iq":               ["phys.gravity", "phys.kinematics", "phys.causality"],
     },
     "vbench_pp": {},
     "v_reasonbench": {},
-    "semantics_axis": {},
+    "semantics_axis": {
+        # ALL 21 axes are VLM prompt-following; every axis gets the pair
+        # (align.text2video, align.prompt_following) + aspect.
+        "object_class":                  ["obj.presence", "align.text2video", "align.prompt_following"],
+        "multiple_objects":              ["comp.multi_object", "obj.count", "align.text2video", "align.prompt_following"],
+        "color":                         ["obj.attribute", "align.text2video", "align.prompt_following"],
+        "material":                      ["obj.attribute", "align.text2video", "align.prompt_following"],
+        "scene":                         ["comp.multi_object", "align.text2video", "align.prompt_following"],
+        "style":                         ["style.consistency", "align.text2video", "align.prompt_following"],
+        "pose":                          ["phys.anatomy", "align.text2video", "align.prompt_following"],
+        "emotion":                       ["subj.character", "align.text2video", "align.prompt_following"],
+        "text_ocr":                      ["obj.attribute", "align.text2video", "align.prompt_following"],
+        "spatial_relationship":          ["comp.spatial", "align.text2video", "align.prompt_following"],
+        "action":                        ["align.action_verb", "align.text2video", "align.prompt_following"],
+        "motion_order":                  ["motion.accuracy", "align.text2video", "align.prompt_following"],
+        "dynamic_attribute":             ["obj.attribute", "align.text2video", "align.prompt_following"],
+        "dynamic_spatial_relationship":  ["comp.spatial", "align.text2video", "align.prompt_following"],
+        "human_interaction":             ["comp.multi_object", "align.text2video", "align.prompt_following"],
+        "complex_plot":                  ["comp.multi_object", "align.text2video", "align.prompt_following"],
+        "complex_landscape":             ["comp.multi_object", "align.text2video", "align.prompt_following"],
+        "camera_motion":                 ["motion.magnitude", "align.text2video", "align.prompt_following"],
+        "shot_composition":              ["style.consistency", "align.text2video", "align.prompt_following"],
+        "temporal_modifier":             ["temp.continuity", "align.text2video", "align.prompt_following"],
+        "overall":                       ["align.prompt_following", "align.text2video"],
+    },
 }
 
 # Attach dim_tags into each bench entry for ergonomic lookup.

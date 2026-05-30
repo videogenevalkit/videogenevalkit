@@ -143,7 +143,7 @@ class TestResolver:
         contributors = resolve_capability("comp.spatial")
         names = [c.source_name for c in contributors]
         assert "vbench/spatial_relationship" in names
-        assert "t2vcompbench/spatial_relationship" in names
+        assert "t2vcompbench/spatial_relationships" in names
 
     def test_resolve_unknown_raises(self):
         with pytest.raises(ValueError, match="unknown capability"):
