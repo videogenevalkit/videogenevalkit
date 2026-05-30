@@ -252,6 +252,11 @@ def prepare_workspace_cmd(workspace: Path, videos: Path) -> None:
               help="Path to a subset JSON file. Overrides the profile's "
                    "default subset.")
 @click.option("--aggregator", default=None, type=click.Choice(list(SUPPORTED_AGGREGATORS)))
+@click.option("--gpus", default=None,
+              help="Comma-separated GPU ids (e.g. 0,1,2,3). Shards --dimensions "
+                   "across them as parallel subprocesses with "
+                   "CUDA_VISIBLE_DEVICES set; finalises with one aggregate pass. "
+                   "Single GPU or one dim → falls through to the normal path.")
 def eval_cmd(
     benchmark: str,
     videos: Path,
@@ -267,6 +272,7 @@ def eval_cmd(
     profile: str | None,
     subset_path: Path | None,
     aggregator: str | None,
+    gpus: str | None,
 ) -> None:
     """Run a single benchmark on a video folder."""
     from videvalkit.runner import run
@@ -313,6 +319,65 @@ def eval_cmd(
             "provider": "adhoc",
             "api_key_env": judge_api_key_env,
         }
+
+    # --gpus N: shard dimensions across N parallel subprocesses, each pinned to
+    # one GPU. Raw outputs land at results/raw/<bench>/<model>/<dim>/<prompt>.json
+    # — disjoint paths, no locking needed. After shards finish, fall through to
+    # the normal run() with the union of dims; the bench adapter's resume check
+    # (ws.has_raw) skips re-evaluation and aggregate produces the full Summary.
+    if gpus:
+        gpu_list = [g.strip() for g in gpus.split(",") if g.strip()]
+        if dimensions:
+            dim_list = list(dimensions)
+        else:
+            cls = bench_cfg.get("cls")
+            dim_list = list(getattr(cls, "dimensions", []) or [])
+            if not dim_list:
+                try:
+                    dim_list = list(getattr(cls(), "dimensions", []) or [])
+                except Exception:
+                    pass
+        if len(gpu_list) >= 2 and len(dim_list) >= 2:
+            n = len(gpu_list)
+            shards = [dim_list[i::n] for i in range(n)]
+            base = [sys.executable, "-m", "videvalkit.cli", "eval",
+                    "--bench", benchmark,
+                    "--videos", str(videos),
+                    "--workspace", str(workspace)]
+            for m in (models or ()):
+                base += ["--models", m]
+            if profile:           base += ["--profile", profile]
+            if subset_path:       base += ["--subset", str(subset_path)]
+            if aggregator:        base += ["--aggregator", aggregator]
+            if no_judge:          base += ["--no-judge"]
+            if judge:             base += ["--judge", judge]
+            if judge_endpoint:    base += ["--judge-endpoint", judge_endpoint]
+            if judge_model:       base += ["--judge-model", judge_model]
+            if judge_kind:        base += ["--judge-kind", judge_kind]
+            if judge_api_key_env: base += ["--judge-api-key-env", judge_api_key_env]
+            import os
+            import subprocess
+            click.echo(f"--gpus: sharding {len(dim_list)} dims over "
+                       f"{n} GPUs ({gpus})", err=True)
+            procs = []
+            for gpu, dims in zip(gpu_list, shards):
+                if not dims:
+                    continue
+                env = dict(os.environ)
+                env["CUDA_VISIBLE_DEVICES"] = gpu
+                cmd = list(base)
+                for d in dims:
+                    cmd += ["--dimensions", d]
+                click.echo(f"  GPU {gpu}: {len(dims)} dims → {dims}", err=True)
+                procs.append(subprocess.Popen(cmd, env=env))
+            rcs = [p.wait() for p in procs]
+            click.echo(f"  shards exit codes: {rcs}", err=True)
+            if any(rc != 0 for rc in rcs):
+                click.echo("  warning: at least one shard failed; "
+                           "aggregate may be incomplete", err=True)
+            # Fall through to a single in-process run() that aggregates over the
+            # full dim list — evaluate() resume-skips work that's on disk.
+            dimensions = tuple(dim_list)
 
     result = run(
         benchmark=benchmark,
