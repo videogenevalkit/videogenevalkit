@@ -32,7 +32,7 @@ log = logging.getLogger(__name__)
 class FVD(BaseDistributionMetric):
     name = "fvd"
     canonical_backbone = "i3d-k400"
-    supported_backbones = ["i3d-k400", "s3d-k400", "videomae-v2-base", "vjepa-l16"]
+    supported_backbones = ["i3d-k400", "s3d-k400", "videomae-base", "videomae-v2-base", "vjepa-l16"]
     min_recommended_samples = 100
     requires_reference = True
 
@@ -82,15 +82,22 @@ class FVD(BaseDistributionMetric):
 
         if bb in ("videomae-v2-base", "vjepa-l16"):
             raise NotImplementedError(
-                f"FVD backbone {bb!r} not wired yet. "
-                f"Use --backbone s3d-k400 [functional] or i3d-k400 [paper-"
-                f"canonical, needs i3d_torchscript.pt placed locally]."
+                f"FVD backbone {bb!r} not wired yet — use --backbone "
+                f"videomae-base (ViT-B/16 transformer, motion-semantic), "
+                f"s3d-k400 (CNN default), or i3d-k400 (paper canonical)."
             )
 
         clip_cfg = clip_sampling or {"n_frames": 16, "resize": 224}
         dev = self._resolve_device(device)
 
-        if bb == "i3d-k400":
+        if bb == "videomae-base":
+            from videvalkit.metrics.backbones.videomae import (
+                VideoMAEFeatureExtractor,
+            )
+            extractor = VideoMAEFeatureExtractor(device=dev)
+            backbone_version = "MCG-NJU/videomae-base-finetuned-kinetics"
+            note = "videomae-base: ViT-B/16 self-supervised, motion-semantic"
+        elif bb == "i3d-k400":
             from videvalkit.metrics.backbones.i3d_k400 import (
                 I3DFeatureExtractor, i3d_weights_path,
             )
