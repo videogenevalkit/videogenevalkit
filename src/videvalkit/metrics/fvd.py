@@ -45,6 +45,8 @@ class FVD(BaseDistributionMetric):
         seed: int = 42,
         device: str = "auto",
         allow_tiny_sample: bool = False,
+        prompts: str | Path | list[str] | None = None,
+        allow_partial_prompts: bool = False,
     ) -> DistributionMetricResult:
         # backbone=None means "default" — we may auto-fall-back to s3d-k400
         # for monitoring when the paper i3d-k400 weights aren't placed.
@@ -57,6 +59,21 @@ class FVD(BaseDistributionMetric):
             )
         if ref_videos is None:
             raise ValueError("FVD requires ref_videos [distribution metric]")
+
+        # Prompt-aligned mode: enforce gen and ref are over the same prompt set
+        # (matched by filename = prompt_id). Without this, an FVD against an
+        # unrelated reference (UCF101 etc.) mixes prompt-domain shift into the
+        # score and the number is uninterpretable.
+        if prompts is not None:
+            from .utils.prompts import load_prompt_ids, verify_prompt_alignment
+            pids = (
+                load_prompt_ids(prompts) if isinstance(prompts, (str, Path))
+                else list(prompts)
+            )
+            gen_videos, ref_videos, _ = verify_prompt_alignment(
+                gen_videos, ref_videos, pids,
+                allow_partial=allow_partial_prompts,
+            )
 
         n_gen = len(gen_videos)
         warning = self.check_sample_size(n_gen, self.min_recommended_samples)

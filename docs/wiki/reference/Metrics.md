@@ -14,6 +14,31 @@ Run any with `videvalkit metric run --name <name>`.
 
 ## Tier 1 — General T2V quality (14)
 
+### Standard input format
+
+T2V monitoring uses **5 s × 24 fps = 120 frames** as the assumed video length.
+Each backbone downsamples internally to its required clip length (S3D 16,
+I3D 16, VideoMAE-v2 16, …). Other lengths work but a warning is logged.
+
+### Prompt-aligned distribution metrics (v0.2+)
+
+`fvd` / `vfid` / `kvd` / `clip-fvd` accept an optional `--prompts <file>`
+flag. When given, the metric enforces that **gen and ref videos come from
+the same prompt set** (filename = `<prompt_id>-<sample>.mp4`). Without this
+guard, comparing model output to an unrelated reference (UCF101 etc.) mixes
+"model quality" with "prompt-domain shift" — the resulting FVD is
+uninterpretable.
+
+```bash
+videvalkit metric run --name fvd \
+  --gen-videos runs/r42/step_5000/samples \
+  --ref-videos baselines/wan5b_ref/samples \
+  --prompts prompts.jsonl   # the prompts both sets were generated from
+```
+
+`--allow-partial-prompts`: use the intersection of prompt_ids present in
+both sets instead of erroring on any mismatch.
+
 ### Distribution-level (4) — need a reference set, judge-free
 
 | Metric | Backbone | Status | Tags |
