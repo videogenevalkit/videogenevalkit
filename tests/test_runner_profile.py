@@ -94,8 +94,8 @@ class TestRunnerProfile:
         import logging
         with caplog.at_level(logging.WARNING):
             run(
-                benchmark="vbench", videos="/tmp/v", workspace="/tmp/ws",
-                profile="quick",  # quick.subset = "quick_v1", no file yet
+                benchmark="physics_iq", videos="/tmp/v", workspace="/tmp/ws",
+                profile="quick",  # physics_iq has no shipped quick_v1.json
             )
         # subset_payload is None (no file found), but run succeeded
         assert captured_payload["subset"] is None
