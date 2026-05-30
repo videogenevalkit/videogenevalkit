@@ -21,6 +21,51 @@ def main() -> None:
     """Unified evaluation toolkit for generative video benchmarks."""
 
 
+@main.group("prompts")
+def prompts_group() -> None:
+    """Prompt manifests for cross-env training pipelines."""
+
+
+@prompts_group.command("dump")
+@click.option("--bench", "benchmark", required=True,
+              type=click.Choice(list(SUPPORTED_BENCHMARKS)))
+@click.option("--dimensions", multiple=True,
+              help="Limit to these dims (default: all bench dims).")
+@click.option("--output", "-o", type=click.Path(path_type=Path), default=None,
+              help="Output JSONL path. Default: stdout.")
+def prompts_dump_cmd(
+    benchmark: str, dimensions: tuple[str, ...], output: Path | None,
+) -> None:
+    """Dump a bench's prompt list as JSONL (stdlib-only consumable).
+
+    Each line is a self-contained JSON object the trainer can parse without
+    any videvalkit imports — bridges the env boundary between training and eval:
+
+        {"id": "...", "prompt_en": "...", "dimensions": [...]}
+    """
+    cfg = SUPPORTED_BENCHMARKS[benchmark]
+    cls = cfg.get("cls")
+    inst = cls()
+    dim_filter = list(dimensions) if dimensions else None
+    n = 0
+    lines: list[str] = []
+    for p in inst.list_prompts(dimensions=dim_filter):
+        rec = {
+            "id":         getattr(p, "prompt_id", None) or getattr(p, "text", ""),
+            "prompt_en":  getattr(p, "text", ""),
+            "dimensions": list(getattr(p, "dimensions", None) or []),
+        }
+        lines.append(json.dumps(rec, ensure_ascii=False))
+        n += 1
+    body = "\n".join(lines) + "\n"
+    if output:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(body)
+        click.echo(f"wrote {n} prompts → {output}", err=True)
+    else:
+        click.echo(body, nl=False)
+
+
 @main.command("list")
 @click.argument("kind", type=click.Choice(["benchmarks", "judges", "aggregators"]))
 @click.option("--no-judge", is_flag=True,
@@ -359,7 +404,13 @@ def eval_cmd(
             import subprocess
             click.echo(f"--gpus: sharding {len(dim_list)} dims over "
                        f"{n} GPUs ({gpus})", err=True)
+            # Shard subprocess stdout/stderr → workspace log files. Keeps the
+            # parent's stdout a single clean JSON blob so cross-env trainers can
+            # safely `r = subprocess.run(...); json.loads(r.stdout)`.
+            log_dir = Path(workspace) / "shard_logs"
+            log_dir.mkdir(parents=True, exist_ok=True)
             procs = []
+            logs = []
             for gpu, dims in zip(gpu_list, shards):
                 if not dims:
                     continue
@@ -368,9 +419,17 @@ def eval_cmd(
                 cmd = list(base)
                 for d in dims:
                     cmd += ["--dimensions", d]
-                click.echo(f"  GPU {gpu}: {len(dims)} dims → {dims}", err=True)
-                procs.append(subprocess.Popen(cmd, env=env))
+                log_path = log_dir / f"gpu{gpu}.log"
+                click.echo(f"  GPU {gpu}: {len(dims)} dims → {dims}  log={log_path}",
+                           err=True)
+                lf = open(log_path, "w")
+                logs.append(lf)
+                procs.append(subprocess.Popen(
+                    cmd, env=env, stdout=lf, stderr=subprocess.STDOUT,
+                ))
             rcs = [p.wait() for p in procs]
+            for lf in logs:
+                lf.close()
             click.echo(f"  shards exit codes: {rcs}", err=True)
             if any(rc != 0 for rc in rcs):
                 click.echo("  warning: at least one shard failed; "

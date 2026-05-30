@@ -27,7 +27,7 @@ def test_gpus_shards_explicit_dimensions(cli_runner, tmp_path):
     """--dimensions A B C --gpus 0,1 → 2 subprocesses, each with a dim subset."""
     spawned = []
 
-    def fake_popen(cmd, env=None):
+    def fake_popen(cmd, env=None, **_kwargs):
         spawned.append((cmd, env))
         proc = MagicMock()
         proc.wait.return_value = 0
