@@ -38,6 +38,8 @@ class KVD(BaseDistributionMetric):
         seed: int = 42,
         device: str = "auto",
         allow_tiny_sample: bool = False,
+        prompts: str | Path | list[str] | None = None,
+        allow_partial_prompts: bool = False,
     ) -> DistributionMetricResult:
         backbone_explicit = backbone is not None
         bb = backbone or self.canonical_backbone
@@ -48,6 +50,20 @@ class KVD(BaseDistributionMetric):
             )
         if ref_videos is None:
             raise ValueError("KVD requires ref_videos [distribution metric]")
+
+        # Prompt-aligned mode: enforce gen and ref are over the same prompt
+        # set (matched by filename = prompt_id). Without this, the score mixes
+        # model-quality with prompt-domain shift and is uninterpretable.
+        if prompts is not None:
+            from .utils.prompts import load_prompt_ids, verify_prompt_alignment
+            pids = (
+                load_prompt_ids(prompts) if isinstance(prompts, (str, Path))
+                else list(prompts)
+            )
+            gen_videos, ref_videos, _ = verify_prompt_alignment(
+                gen_videos, ref_videos, pids,
+                allow_partial=allow_partial_prompts,
+            )
 
         n_gen = len(gen_videos)
         warning = self.check_sample_size(n_gen, self.min_recommended_samples)

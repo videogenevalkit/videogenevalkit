@@ -14,6 +14,27 @@
 
 ## 第 1 层 — 通用 T2V 质量(14)
 
+### 标准输入格式
+
+T2V 监控假定视频为 **5 秒 × 24 fps = 120 帧**。每个骨干在内部下采样到自己需要的
+clip 长度(S3D 16、I3D 16、VideoMAE-v2 16……)。其它长度可用,但会警告。
+
+### Prompt 对齐的分布型指标(v0.2+)
+
+`fvd` / `vfid` / `kvd` / `clip-fvd` 接受可选 `--prompts <file>` 标志。给了之后,
+指标**强制 gen 和 ref 视频来自同一 prompt 集**(文件名 = `<prompt_id>-<sample>.mp4`)。
+没有这层守卫,把模型输出与无关参考集(UCF101 等)比,FVD 数字会把"模型质量差异"
+与"prompt 域差异"混在一起,**不可解读**。
+
+```bash
+videvalkit metric run --name fvd \
+  --gen-videos runs/r42/step_5000/samples \
+  --ref-videos baselines/wan5b_ref/samples \
+  --prompts prompts.jsonl   # 两边视频是从这些 prompt 生成的
+```
+
+`--allow-partial-prompts`:用两边共同存在的 prompt 子集,而不是遇到任何不匹配就报错。
+
 ### 分布级(4)— 需要参考集,无需评审
 
 | 指标 | 骨干 | 状态 | 标签 |

@@ -851,11 +851,16 @@ def metric_show_cmd(name: str) -> None:
               type=click.Choice(["auto", "cuda", "cpu", "npu"]))
 @click.option("--allow-tiny-sample", is_flag=True,
               help="Bypass the small-N error guard for distribution metrics.")
+@click.option("--allow-partial-prompts", is_flag=True,
+              help="For prompt-aligned FVD/VFID/KVD/CLIP-FVD: use the "
+                   "intersection of prompts present in both gen and ref "
+                   "instead of erroring on any mismatch.")
 @click.option("--output", type=click.Path(path_type=Path), default=None)
 def metric_run_cmd(
     name: str, gen_videos: Path | None, videos: Path | None,
     ref_videos: Path | None, refs: str | None, prompts: Path | None,
-    judge: str | None, device: str, allow_tiny_sample: bool, output: Path | None,
+    judge: str | None, device: str, allow_tiny_sample: bool,
+    allow_partial_prompts: bool, output: Path | None,
 ) -> None:
     """Run a single metric and print/save its result."""
     from videvalkit.metrics import SUPPORTED_METRICS, get_metric
@@ -885,6 +890,8 @@ def metric_run_cmd(
                 gen_videos=_list_videos(gen_videos),
                 ref_videos=_list_videos(Path(ref_dir)),
                 device=device, allow_tiny_sample=allow_tiny_sample,
+                prompts=prompts,
+                allow_partial_prompts=allow_partial_prompts,
             )
         elif kind == "per_prompt_reference_free":
             vdir = videos or gen_videos
