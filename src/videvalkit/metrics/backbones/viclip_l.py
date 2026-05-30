@@ -44,6 +44,10 @@ def _candidate_dirs() -> list[Path]:
     if env:
         p = Path(env)
         dirs.append(p.parent if p.suffix else p)
+    # Site-shared ckpt root (set up by scripts/setup_ckpt_dir.sh).
+    ckpt_home = os.environ.get("VIDEVALKIT_CKPT_HOME")
+    if ckpt_home:
+        dirs.append(Path(ckpt_home) / "viclip")
     dirs.append(_cache_home() / "viclip")
     dirs.append(Path.home() / ".cache" / "vbench" / "ViCLIP")
     return dirs
